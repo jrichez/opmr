@@ -67,8 +67,7 @@ def sample_communes(
 
 @router.get("/geojson")
 def communes_geojson(
-    # pagination / sécurité
-    limit: int = 500,
+
 
     # filtres excluants
     littoral: Optional[bool] = None,
@@ -109,7 +108,7 @@ def communes_geojson(
 
     return get_communes_geojson(
         db=db,
-        limit=limit,
+
         littoral=littoral,
         montagne=montagne,
         prix_min=prix_min,

@@ -13,7 +13,6 @@ from geoalchemy2.functions import (
 from app.models.communes import Commune
 from app.services.scoring import compute_score
 
-
 # ============================================================
 # 🏘️ Mapping densité (API → base)
 # ============================================================
@@ -22,26 +21,18 @@ DENSITE_MAPPING = {
     "village": "Village",
     "bourg": "Bourg",
     "ville": "Ville",
+    "grande ville": "Grande Ville",
     "grande_ville": "Grande Ville",
 }
 
 
-# ============================================================
-# 🔢 Utilitaires simples
-# ============================================================
-
 def get_communes_count(db: Session) -> int:
-    """
-    Retourne le nombre total de communes.
-    """
+    """Nombre total de communes."""
     return db.query(Commune).count()
 
 
 def get_communes_sample(db: Session, limit: int = 10):
-    """
-    Retourne un échantillon de communes (sans géométrie),
-    utile pour tests et debug.
-    """
+    """Petit échantillon pour debug."""
     return (
         db.query(
             Commune.INSEE_COM,
@@ -62,7 +53,7 @@ def get_communes_sample(db: Session, limit: int = 10):
 
 def get_communes_geojson(
     db: Session,
-    limit: int = 500,
+    limit: Optional[int] = None,  # <= plus de limite par défaut
 
     # filtres excluants
     littoral: Optional[bool] = None,
@@ -84,14 +75,13 @@ def get_communes_geojson(
     w_sun: int = 1,
 ):
     """
-    Retourne les communes sous forme GeoJSON,
-    avec filtres combinables et score global dynamique.
+    Retourne les communes en GeoJSON, avec filtres combinables
+    et score global dynamique.
     """
 
     # --------------------------------------------------------
-    # 🔎 Construction de la requête de base
+    # 🔎 Requête de base
     # --------------------------------------------------------
-
     query = db.query(
         Commune.INSEE_COM,
         Commune.libgeo,
@@ -108,75 +98,53 @@ def get_communes_geojson(
         ST_AsGeoJSON(Commune.geometry).label("geometry"),
     )
 
-    # --------------------------------------------------------
-    # 🌊 Filtre littoral
-    # --------------------------------------------------------
-
+    # 🌊 Littoral
     if littoral is not None:
         query = query.filter(Commune.littoral_flag == int(littoral))
 
-    # --------------------------------------------------------
-    # 🏔️ Filtre montagne
-    # --------------------------------------------------------
-
+    # 🏔️ Montagne
     if montagne is not None:
         query = query.filter(Commune.montagne_flag == int(montagne))
 
-    # --------------------------------------------------------
-    # 💶 Filtre prix au m²
-    # --------------------------------------------------------
-
+    # 💶 Prix m²
     if prix_min is not None:
         query = query.filter(Commune.Prixm2Moyen >= prix_min)
-
     if prix_max is not None:
         query = query.filter(Commune.Prixm2Moyen <= prix_max)
 
-    # --------------------------------------------------------
-    # 🏘️ Filtre densité (normalisé)
-    # --------------------------------------------------------
-
+    # 🏘️ Densité
     if densite is not None:
         densite_db = DENSITE_MAPPING.get(densite.lower())
         if densite_db:
             query = query.filter(Commune.densite_cat == densite_db)
         else:
-            # valeur invalide → aucun résultat
-            query = query.filter(False)
+            query = query.filter(False)  # rien
 
-    # --------------------------------------------------------
-    # 🎯 Filtre distance personnalisée (PostGIS)
-    # --------------------------------------------------------
-
+    # 🎯 Distance personnalisée
     if lat is not None and lon is not None and rayon_km is not None:
         point_l93 = ST_Transform(
             ST_SetSRID(
-                ST_MakePoint(lon, lat),  # ⚠️ ordre lon, lat
-                4326
+                ST_MakePoint(lon, lat),
+                4326,
             ),
-            2154
+            2154,
         )
-
         query = query.filter(
             ST_DWithin(
                 Commune.geom_l93,
                 point_l93,
-                rayon_km * 1000  # km → mètres
+                rayon_km * 1000,
             )
         )
 
-    # --------------------------------------------------------
-    # 📥 Exécution de la requête
-    # --------------------------------------------------------
+    # Exécution (sans limite si limit=None)
+    if limit is not None:
+        rows = query.limit(limit).all()
+    else:
+        rows = query.all()
 
-    rows = query.limit(limit).all()
-
-    # --------------------------------------------------------
-    # 🧮 Construction du GeoJSON + score dynamique
-    # --------------------------------------------------------
-
+    # Construction GeoJSON
     features = []
-
     for r in rows:
         properties = {
             "score_sante": r.score_sante,
@@ -185,7 +153,6 @@ def get_communes_geojson(
             "temp_scaled": r.temp_scaled,
             "sun_scaled": r.sun_scaled,
         }
-
         weights = {
             "score_sante": w_sante,
             "mag_scaled": w_mag,
@@ -193,7 +160,6 @@ def get_communes_geojson(
             "temp_scaled": w_temp,
             "sun_scaled": w_sun,
         }
-
         score_global = compute_score(properties, weights)
 
         features.append(
@@ -218,7 +184,4 @@ def get_communes_geojson(
             }
         )
 
-    return {
-        "type": "FeatureCollection",
-        "features": features,
-    }
+    return {"type": "FeatureCollection", "features": features}
