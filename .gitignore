@@ -15,3 +15,12 @@ Thumbs.db
 # Docker volumes (si utilisés plus tard)
 data/
 
+# --- DATA ---
+*.gpkg
+*.shp
+*.csv
+*.geojson
+*.parquet
+Données/
+data/
+
