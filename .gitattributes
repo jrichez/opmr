@@ -1,0 +1,18 @@
+# Force LF line endings to keep consistency for all devs
+* text=auto eol=lf
+
+# Specific languages
+*.sh text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+
+# Binary files (Git ne doit pas tenter de modifier)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.geojson binary
+*.gpkg binary
+*.csv text
