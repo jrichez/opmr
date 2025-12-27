@@ -1,241 +1,483 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import LeafletMap from "./components/LeafletMap";
+import { useCallback, useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+import LeafletMap, { AppliedFilters, EmplacementMode } from "./components/LeafletMap";
 
-type FiltersPayload = {
-  mer: boolean;
-  montagne: boolean;
-  densite: string | null;
-  rayonKm: number | null;
-  prixM2Max: number | null;
-  sunPref: number | null;
-};
+const MAP_DEFAULT_RAYON_KM = 20;
 
-const SUN_MIN = 1710; // valeurs approchées d'après ta base
-const SUN_MAX = 2914;
+type Importance = 1 | 2 | 3;
 
-const DENSITY_LABELS = ["Village", "Bourg", "Ville", "Grande Ville"];
+interface PlaceSuggestion {
+  label: string;
+  lat: number;
+  lon: number;
+}
+
+const DynamicLeafletMap = dynamic(() => import("./components/LeafletMap"), {
+  ssr: false,
+});
 
 export default function HomePage() {
-  const [panelOpen, setPanelOpen] = useState<boolean>(true);
+  const [showFilters, setShowFilters] = useState(true);
 
-  // Emplacement
-  const [locationMer, setLocationMer] = useState(false);
-  const [locationMontagne, setLocationMontagne] = useState(false);
-  const [rayonKm, setRayonKm] = useState<number>(20);
-
-  // Densité
+  // Filtres en cours d’édition
+  const [emplacement, setEmplacement] = useState<EmplacementMode>(null);
+  const [rayonKm, setRayonKm] = useState<number>(MAP_DEFAULT_RAYON_KM);
   const [densite, setDensite] = useState<string | null>(null);
 
-  // Immobilier
-  const [surface, setSurface] = useState<string>("");
-  const [budget, setBudget] = useState<string>("");
+  const [surfaceSouhaitee, setSurfaceSouhaitee] = useState<string>("");
+  const [budgetMax, setBudgetMax] = useState<string>("");
 
-  // Ensoleillement (heures/an)
-  const [sunPref, setSunPref] = useState<number>((SUN_MIN + SUN_MAX) / 2);
+  // Slider soleil : 0 = peu de soleil, 1 = beaucoup (pour l’instant on ne l’envoie qu’en état)
+  const [sunPreference, setSunPreference] = useState<number>(1);
 
-  // Filtres réellement envoyés à la carte / API
-  const [confirmedFilters, setConfirmedFilters] = useState<FiltersPayload | null>(
+  // Pondérations (x1/x2/x3)
+  const [wSante, setWSante] = useState<Importance>(2);
+  const [wAsso, setWAsso] = useState<Importance>(1);
+  const [wMag, setWMag] = useState<Importance>(1);
+
+  // Lieu précis (via API adresse.data.gouv.fr)
+  const [placeQuery, setPlaceQuery] = useState("");
+  const [placeSuggestions, setPlaceSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [placeLat, setPlaceLat] = useState<number | null>(null);
+  const [placeLon, setPlaceLon] = useState<number | null>(null);
+  const [isSearchingPlace, setIsSearchingPlace] = useState(false);
+
+  // Filtres vraiment appliqués à la carte
+  const [appliedFilters, setAppliedFilters] = useState<AppliedFilters | null>(
     null
   );
 
-  const applyFilters = useCallback(() => {
-    let prixM2Max: number | null = null;
+  // Compteur de communes
+  const [featureCount, setFeatureCount] = useState<number>(0);
 
-    const s = parseFloat(surface.replace(",", "."));
-    const b = parseFloat(budget.replace(",", "."));
-
-    // On applique le filtre prix SEULEMENT si surface ET budget sont valides
-    if (!Number.isNaN(s) && s > 0 && !Number.isNaN(b) && b > 0) {
-      prixM2Max = b / s;
+  // =========================================================
+  // 🔍 Autocomplétion "Lieu précis" (API adresse.data.gouv.fr)
+  // =========================================================
+  useEffect(() => {
+    if (!placeQuery || emplacement !== "lieu") {
+      setPlaceSuggestions([]);
+      return;
     }
 
-    const payload: FiltersPayload = {
-      mer: locationMer,
-      montagne: locationMontagne,
+    const controller = new AbortController();
+
+    async function fetchSuggestions() {
+      try {
+        setIsSearchingPlace(true);
+        const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(
+          placeQuery
+        )}&limit=5`;
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) {
+          setPlaceSuggestions([]);
+          return;
+        }
+        const data = await res.json();
+        const suggestions: PlaceSuggestion[] =
+          data.features?.map((f: any) => ({
+            label: f.properties.label as string,
+            lon: f.geometry.coordinates[0] as number,
+            lat: f.geometry.coordinates[1] as number,
+          })) ?? [];
+        setPlaceSuggestions(suggestions);
+      } catch (e) {
+        if ((e as any).name !== "AbortError") {
+          console.error("Erreur API adresse.data.gouv.fr", e);
+        }
+      } finally {
+        setIsSearchingPlace(false);
+      }
+    }
+
+    const timer = setTimeout(fetchSuggestions, 350);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [placeQuery, emplacement]);
+
+  const selectPlaceSuggestion = (s: PlaceSuggestion) => {
+    setPlaceQuery(s.label);
+    setPlaceSuggestions([]);
+    setPlaceLat(s.lat);
+    setPlaceLon(s.lon);
+  };
+
+  // =========================================================
+  // ✅ Application des filtres
+  // =========================================================
+
+  const applyFilters = useCallback(() => {
+    // Surface / budget : si l’un des deux manque → aucun filtre immobilier
+    const surfNum = surfaceSouhaitee ? Number(surfaceSouhaitee) : null;
+    const budgetNum = budgetMax ? Number(budgetMax) : null;
+
+    const filters: AppliedFilters = {
+      emplacement,
+      rayonKm,
       densite,
-      rayonKm: rayonKm || null,
-      prixM2Max,
-      sunPref,
+      surfaceSouhaitee: surfNum && surfNum > 0 ? surfNum : null,
+      budgetMax: budgetNum && budgetNum > 0 ? budgetNum : null,
+      wSante,
+      wAsso,
+      wMag,
+      sunPreference,
+      placeLat,
+      placeLon,
     };
 
-    console.log("🎯 Filtres appliqués :", payload);
-    setConfirmedFilters(payload);
-  }, [locationMer, locationMontagne, densite, rayonKm, surface, budget, sunPref]);
+    setAppliedFilters(filters);
+  }, [
+    emplacement,
+    rayonKm,
+    densite,
+    surfaceSouhaitee,
+    budgetMax,
+    wSante,
+    wAsso,
+    wMag,
+    sunPreference,
+    placeLat,
+    placeLon,
+  ]);
 
-  const toggleDensite = (value: string) => {
-    setDensite((prev) => (prev === value ? null : value));
+  // Reset localisation quand on change d’emplacement
+  const handleEmplacementChange = (mode: EmplacementMode) => {
+    setEmplacement(mode);
+    if (mode !== "lieu") {
+      setPlaceQuery("");
+      setPlaceSuggestions([]);
+      setPlaceLat(null);
+      setPlaceLon(null);
+    }
   };
+
+  const importanceButtonClass = (
+    current: Importance,
+    value: Importance
+  ): string =>
+    [
+      "px-3 py-1 rounded-full border text-xs font-medium transition-colors",
+      current === value
+        ? "bg-emerald-600 text-white border-emerald-600"
+        : "bg-white text-slate-700 border-slate-300 hover:bg-emerald-50",
+    ].join(" ");
+
+  const densiteButtonClass = (value: string): string =>
+    [
+      "flex-1 text-center py-2 rounded-md border text-sm font-medium",
+      densite === value
+        ? "bg-emerald-600 text-white border-emerald-600"
+        : "bg-white text-slate-700 border-slate-300 hover:bg-emerald-50",
+    ].join(" ");
+
+  const emplacementButtonClass = (value: EmplacementMode): string =>
+    [
+      "flex-1 text-center py-2 rounded-md border text-sm font-semibold",
+      emplacement === value
+        ? "bg-emerald-600 text-white border-emerald-600"
+        : "bg-white text-slate-700 border-slate-300 hover:bg-emerald-50",
+    ].join(" ");
+
+  // ---------------------------------------------------------
+  // Rendu
+  // ---------------------------------------------------------
 
   return (
     <div className="flex flex-col h-screen">
-      {/* Header */}
-      <header className="h-14 px-6 flex items-center justify-between border-b bg-white">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-full bg-teal-500" />
-          <span className="font-semibold text-lg text-slate-800">
-            Où passer ma retraite ?
-          </span>
+      {/* Header simple */}
+      <header className="h-14 flex items-center justify-between px-4 bg-white shadow-md z-20">
+        <div className="flex items-center gap-2 text-emerald-700 font-semibold">
+          <span className="text-lg">🏡</span>
+          <span>Où passer ma retraite ?</span>
         </div>
-        <nav className="flex gap-4 text-sm text-slate-500">
-          <span className="cursor-pointer hover:text-slate-800">Carte</span>
-          <span className="cursor-pointer hover:text-slate-800">Méthodologie</span>
-          <span className="cursor-pointer hover:text-slate-800">À propos</span>
-        </nav>
+        <div className="text-xs text-slate-500 italic">
+          Prototype – carte interactive
+        </div>
       </header>
 
-      {/* Carte + overlay filtres */}
-      <div className="relative flex-1">
-        <LeafletMap filters={confirmedFilters} />
-
-        {/* Bouton toggle panel */}
+      {/* Carte + overlays */}
+      <main className="relative flex-1">
+        {/* Bouton montrer / masquer les filtres */}
         <button
-          onClick={() => setPanelOpen((p) => !p)}
-          className="absolute top-4 left-4 z-[1000] bg-white/90 border rounded-full px-3 py-1 text-xs shadow-sm hover:bg-white"
+          className="filters-toggle bg-white shadow-md rounded-full px-3 py-1 text-xs border border-slate-200 hover:bg-slate-50"
+          onClick={() => setShowFilters((prev) => !prev)}
         >
-          {panelOpen ? "Masquer les filtres" : "Afficher les filtres"}
+          {showFilters ? "Masquer les filtres" : "Afficher les filtres"}
         </button>
 
-        {/* Panel filtres */}
-        {panelOpen && (
-          <div className="absolute top-12 left-4 z-[900] w-80 max-w-full bg-white/95 backdrop-blur-sm shadow-lg rounded-xl border p-4 flex flex-col gap-4">
-            {/* Emplacement */}
-            <section>
-              <h2 className="font-semibold text-sm mb-2 text-slate-800">
-                Emplacement
-              </h2>
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={() => setLocationMer((v) => !v)}
-                  className={`flex-1 px-2 py-1 rounded-md text-xs font-medium ${
-                    locationMer
-                      ? "bg-teal-600 text-white"
-                      : "bg-teal-50 text-teal-800 border border-teal-200"
-                  }`}
-                >
-                  Mer
-                </button>
-                <button
-                  onClick={() => setLocationMontagne((v) => !v)}
-                  className={`flex-1 px-2 py-1 rounded-md text-xs font-medium ${
-                    locationMontagne
-                      ? "bg-emerald-600 text-white"
-                      : "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                  }`}
-                >
-                  Montagne
-                </button>
-              </div>
+        {/* Compteur de communes (en haut à droite, sous le zoom) */}
+        <div className="feature-counter bg-white shadow-md rounded-md px-3 py-1 text-xs text-slate-700 border border-slate-200">
+          {appliedFilters
+            ? `Communes correspondant aux filtres : ${featureCount}`
+            : "Aucun filtre appliqué"}
+        </div>
 
-              {/* Slider rayon */}
-              <label className="flex flex-col gap-1 text-xs text-slate-700">
-                Rayon (km)
-                <div className="flex items-center gap-2">
+        {/* Panel de filtres */}
+        {showFilters && (
+          <div className="filters-panel">
+            <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-200 px-4 py-4 space-y-4">
+              {/* Emplacement */}
+              <section>
+                <h2 className="font-semibold text-slate-900 mb-2">
+                  Emplacement
+                </h2>
+                <div className="flex gap-2 mb-2">
+                  <button
+                    className={emplacementButtonClass("mer")}
+                    onClick={() =>
+                      handleEmplacementChange(
+                        emplacement === "mer" ? null : "mer"
+                      )
+                    }
+                  >
+                    Mer
+                  </button>
+                  <button
+                    className={emplacementButtonClass("montagne")}
+                    onClick={() =>
+                      handleEmplacementChange(
+                        emplacement === "montagne" ? null : "montagne"
+                      )
+                    }
+                  >
+                    Montagne
+                  </button>
+                </div>
+
+                {/* Lieu précis */}
+                <div className="mb-3 relative">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    Lieu précis (ville, adresse…)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    placeholder="Rechercher un lieu"
+                    value={placeQuery}
+                    onChange={(e) => {
+                      setPlaceQuery(e.target.value);
+                      handleEmplacementChange("lieu");
+                    }}
+                  />
+                  {isSearchingPlace && (
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
+                      …
+                    </div>
+                  )}
+
+                  {placeSuggestions.length > 0 && (
+                    <div className="autocomplete-list">
+                      {placeSuggestions.map((s) => (
+                        <div
+                          key={`${s.lat}-${s.lon}-${s.label}`}
+                          className="autocomplete-item"
+                          onClick={() => selectPlaceSuggestion(s)}
+                        >
+                          {s.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Rayon km */}
+                <div className="mt-2">
+                  <div className="flex justify-between text-[11px] text-slate-500 mb-1">
+                    <span>Rayon (km)</span>
+                    <span>{rayonKm} km</span>
+                  </div>
                   <input
                     type="range"
-                    min={0}
+                    min={1}
                     max={100}
                     value={rayonKm}
-                    onChange={(e) =>
-                      setRayonKm(parseInt(e.target.value, 10) || 0)
-                    }
-                    className="flex-1"
+                    onChange={(e) => setRayonKm(Number(e.target.value))}
+                    className="w-full"
                   />
-                  <span className="w-10 text-right text-[11px]">
-                    {rayonKm} km
-                  </span>
                 </div>
-              </label>
-            </section>
+              </section>
 
-            {/* Densité */}
-            <section>
-              <h2 className="font-semibold text-sm mb-2 text-slate-800">
-                Densité
-              </h2>
-              <div className="grid grid-cols-2 gap-2">
-                {DENSITY_LABELS.map((label) => (
-                  <button
-                    key={label}
-                    onClick={() => toggleDensite(label)}
-                    className={`px-2 py-1 rounded-md text-xs ${
-                      densite === label
-                        ? "bg-slate-800 text-white"
-                        : "bg-slate-50 text-slate-800 border border-slate-200"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </section>
+              {/* Densité */}
+              <section>
+                <h2 className="font-semibold text-slate-900 mb-2">Densité</h2>
+                <div className="grid grid-cols-2 gap-2">
+                  {["Village", "Bourg", "Ville", "Grande Ville"].map(
+                    (label) => (
+                      <button
+                        key={label}
+                        className={densiteButtonClass(label)}
+                        onClick={() =>
+                          setDensite((prev) =>
+                            prev === label ? null : label
+                          )
+                        }
+                      >
+                        {label}
+                      </button>
+                    )
+                  )}
+                </div>
+              </section>
 
-            {/* Immobilier */}
-            <section>
-              <h2 className="font-semibold text-sm mb-2 text-slate-800">
-                Immobilier
-              </h2>
-              <div className="flex flex-col gap-2 text-xs">
-                <label className="flex flex-col gap-1">
-                  Surface souhaitée (m²)
-                  <input
-                    type="number"
-                    min={0}
-                    value={surface}
-                    onChange={(e) => setSurface(e.target.value)}
-                    className="border rounded-md px-2 py-1 text-xs"
-                    placeholder="ex : 80"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  Budget max (€)
-                  <input
-                    type="number"
-                    min={0}
-                    value={budget}
-                    onChange={(e) => setBudget(e.target.value)}
-                    className="border rounded-md px-2 py-1 text-xs"
-                    placeholder="ex : 250000"
-                  />
-                </label>
-              </div>
-            </section>
+              {/* Immobilier */}
+              <section>
+                <h2 className="font-semibold text-slate-900 mb-2">
+                  Immobilier
+                </h2>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Surface souhaitée (m²)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      value={surfaceSouhaitee}
+                      onChange={(e) => setSurfaceSouhaitee(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Budget max (€)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      value={budgetMax}
+                      onChange={(e) => setBudgetMax(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </section>
 
-            {/* Ensoleillement */}
-            <section>
-              <h2 className="font-semibold text-sm mb-2 text-slate-800">
-                Ensoleillement souhaité
-              </h2>
-              <div className="flex flex-col gap-1 text-xs">
+              {/* Ensoleillement */}
+              <section>
+                <h2 className="font-semibold text-slate-900 mb-1">
+                  Ensoleillement souhaité
+                </h2>
+                <p className="text-[11px] text-slate-500 mb-1">
+                  À gauche : plutôt peu de soleil – À droite : beaucoup de
+                  soleil (pondération maximale dans le score)
+                </p>
                 <div className="flex justify-between text-[11px] text-slate-500">
-                  <span>{Math.round(SUN_MIN)} h/an</span>
-                  <span>{Math.round(SUN_MAX)} h/an</span>
+                  <span>Min</span>
+                  <span>Max</span>
                 </div>
                 <input
                   type="range"
-                  min={SUN_MIN}
-                  max={SUN_MAX}
-                  value={sunPref}
+                  min={0}
+                  max={100}
+                  value={sunPreference * 100}
                   onChange={(e) =>
-                    setSunPref(parseInt(e.target.value, 10) || SUN_MIN)
+                    setSunPreference(Number(e.target.value) / 100)
                   }
+                  className="w-full mt-1"
                 />
-                <div className="text-right text-[11px] text-slate-600">
-                  ~ {Math.round(sunPref)} h/an
-                </div>
-              </div>
-            </section>
+              </section>
 
-            <button
-              onClick={applyFilters}
-              className="mt-2 w-full bg-teal-600 text-white text-sm font-semibold py-2 rounded-lg hover:bg-teal-700 transition"
-            >
-              Appliquer les filtres
-            </button>
+              {/* Pondérations Santé / Asso / Magasins */}
+              <section className="space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-1">
+                    Présence de médecins / hôpitaux
+                  </h3>
+                  <div className="flex gap-2">
+                    <button
+                      className={importanceButtonClass(wSante, 1)}
+                      onClick={() => setWSante(1)}
+                    >
+                      Peu important
+                    </button>
+                    <button
+                      className={importanceButtonClass(wSante, 2)}
+                      onClick={() => setWSante(2)}
+                    >
+                      Important
+                    </button>
+                    <button
+                      className={importanceButtonClass(wSante, 3)}
+                      onClick={() => setWSante(3)}
+                    >
+                      Très important
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-1">
+                    Vie associative
+                  </h3>
+                  <div className="flex gap-2">
+                    <button
+                      className={importanceButtonClass(wAsso, 1)}
+                      onClick={() => setWAsso(1)}
+                    >
+                      Peu important
+                    </button>
+                    <button
+                      className={importanceButtonClass(wAsso, 2)}
+                      onClick={() => setWAsso(2)}
+                    >
+                      Important
+                    </button>
+                    <button
+                      className={importanceButtonClass(wAsso, 3)}
+                      onClick={() => setWAsso(3)}
+                    >
+                      Très important
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900 mb-1">
+                    Magasins
+                  </h3>
+                  <div className="flex gap-2">
+                    <button
+                      className={importanceButtonClass(wMag, 1)}
+                      onClick={() => setWMag(1)}
+                    >
+                      Peu important
+                    </button>
+                    <button
+                      className={importanceButtonClass(wMag, 2)}
+                      onClick={() => setWMag(2)}
+                    >
+                      Important
+                    </button>
+                    <button
+                      className={importanceButtonClass(wMag, 3)}
+                      onClick={() => setWMag(3)}
+                    >
+                      Très important
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              {/* Bouton appliquer */}
+              <button
+                onClick={applyFilters}
+                className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl shadow-md transition-colors"
+              >
+                Appliquer les filtres
+              </button>
+            </div>
           </div>
         )}
-      </div>
+
+        {/* Carte Leaflet */}
+        <DynamicLeafletMap
+          filters={appliedFilters}
+          onFeatureCountChange={setFeatureCount}
+        />
+      </main>
     </div>
   );
 }

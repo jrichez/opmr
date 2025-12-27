@@ -1,85 +1,67 @@
+
 "use client";
 
-import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
-import { useEffect, useState } from "react";
+import { MapContainer, TileLayer, GeoJSON, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-type Filters = {
-  mer: boolean;
-  montagne: boolean;
-  densite: string | null;
-  rayonKm: number | null;
-  prixM2Max: number | null;
-  sunPref: number | null; // heures/an
-};
+interface LeafletMapInnerProps {
+  geojson: any | null;
+}
 
-const API_BASE = "http://localhost:8000";
+// centre approximatif de la France
+const DEFAULT_CENTER: [number, number] = [46.7, 2.5];
 
-export default function LeafletMapInner({
-  filters,
-}: {
-  filters: Filters | null;
-}) {
-  const [geojson, setGeojson] = useState<any | null>(null);
+export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
+  // Style choropleth turquoise en fonction du score_global (0→1)
+  const styleFeature = (feature: any) => {
+    const score = feature?.properties?.score_global ?? 0;
+    const s = Math.max(0, Math.min(1, Number(score) || 0));
 
-  const buildQuery = (f: Filters) => {
-    const params = new URLSearchParams();
+    // On part sur une teinte turquoise (hsl) et on joue sur la luminosité
+    // Très faible => turquoise foncé ; Bon => turquoise clair
+    const lightness = 35 + s * 40; // 35% (foncé) → 75% (clair)
+    const fill = `hsl(174, 60%, ${lightness}%)`;
 
-    if (f.mer) params.append("mer", "1");
-    if (f.montagne) params.append("montagne", "1");
-    if (f.densite) params.append("densite", f.densite);
-    if (f.rayonKm !== null && !Number.isNaN(f.rayonKm)) {
-      params.append("rayon_km", String(f.rayonKm));
-    }
-    if (f.prixM2Max !== null && !Number.isNaN(f.prixM2Max)) {
-      params.append("prix_max", String(f.prixM2Max));
-    }
-    if (f.sunPref !== null && !Number.isNaN(f.sunPref)) {
-      params.append("sun_pref", String(f.sunPref));
-    }
-
-    const qs = params.toString();
-    return qs ? `?${qs}` : "";
+    return {
+      color: "#0f766e",    // contour
+      weight: 0.5,
+      fillColor: fill,
+      fillOpacity: 0.8,
+    };
   };
 
-  useEffect(() => {
-    if (!filters) {
-      setGeojson(null);
-      return;
-    }
+  const onEachFeature = (feature: any, layer: any) => {
+    const nom = feature?.properties?.nom ?? "Commune";
+    const score = feature?.properties?.score_global;
+    const scoreTxt =
+      typeof score === "number" ? score.toFixed(2) : "N/A";
 
-    const url = `${API_BASE}/communes/geojson${buildQuery(filters)}`;
-    console.log("🌍 Fetch URL:", url);
-
-    fetch(url)
-      .then((res) => res.json())
-      .then((data) => setGeojson(data))
-      .catch((err) => {
-        console.error("Erreur de fetch GeoJSON:", err);
-        setGeojson(null);
-      });
-  }, [filters]);
+    layer.bindTooltip(`${nom} – Score : ${scoreTxt}`, {
+      direction: "top",
+      sticky: true,
+      opacity: 0.9,
+      className: "text-[11px]",
+    });
+  };
 
   return (
     <MapContainer
-      center={[46.7, 2.5]}
+      center={DEFAULT_CENTER}
       zoom={6}
       style={{ height: "100%", width: "100%" }}
+      className="leaflet-container-custom"
     >
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution="© OpenStreetMap contributors"
       />
 
-      {geojson && (
+      {geojson && geojson.features && geojson.features.length > 0 && (
         <GeoJSON
-          key={Date.now()}
+          key={geojson.features.length} // force un refresh quand le jeu change
           data={geojson}
-          style={() => ({
-            color: "#0f766e", // turquoise
-            weight: 1,
-            fillOpacity: 0.6,
-          })}
+          style={styleFeature}
+          onEachFeature={onEachFeature}
         />
       )}
     </MapContainer>
