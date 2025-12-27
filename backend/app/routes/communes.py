@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
 from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.services.communes import (
@@ -9,117 +10,69 @@ from app.services.communes import (
     get_communes_geojson,
 )
 
-router = APIRouter(
-    prefix="/communes",
-    tags=["Communes"]
-)
+router = APIRouter()
 
 
-# ============================================================
-# 🔢 Endpoint de test : nombre total de communes
-# ============================================================
-
-@router.get("/count")
-def count_communes(db: Session = Depends(get_db)):
+@router.get("/communes/count")
+def communes_count(db: Session = Depends(get_db)):
     """
-    GET /communes/count
-
-    Vérifie :
-    - connexion DB
-    - mapping ORM
+    Retourne le nombre total de communes.
     """
-    total = get_communes_count(db)
-    return {"total_communes": total}
+    return {"count": get_communes_count(db)}
 
 
-# ============================================================
-# 🧪 Endpoint de test : échantillon de communes (sans géométrie)
-# ============================================================
-
-@router.get("/sample")
-def sample_communes(
-    limit: int = 10,
-    db: Session = Depends(get_db)
-):
-    """
-    GET /communes/sample?limit=10
-
-    Retourne un échantillon de communes pour inspection.
-    """
-    rows = get_communes_sample(db, limit)
-
-    return [
-        {
-            "insee": r.INSEE_COM,
-            "nom": r.libgeo,
-            "departement": r.code_departement,
-            "prix_m2": r.Prixm2Moyen,
-            "densite": r.densite_cat,
-            "score_sante": r.score_sante,
-        }
-        for r in rows
-    ]
-
-
-# ============================================================
-# 🗺️ Endpoint principal : GeoJSON + filtres + score dynamique
-# ============================================================
-
-@router.get("/geojson")
-def communes_geojson(
-
-
-    # filtres excluants
-    littoral: Optional[bool] = None,
-    montagne: Optional[bool] = None,
-    prix_min: Optional[float] = None,
-    prix_max: Optional[float] = None,
-    densite: Optional[str] = None,
-
-    # filtre distance personnalisée
-    lat: Optional[float] = None,
-    lon: Optional[float] = None,
-    rayon_km: Optional[float] = None,
-
-    # pondérations du score
-    w_sante: int = 1,
-    w_mag: int = 1,
-    w_asso: int = 1,
-    w_temp: int = 1,
-    w_sun: int = 1,
-
+@router.get("/communes/sample")
+def communes_sample(
+    limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
 ):
     """
-    GET /communes/geojson
-
-    Endpoint principal pour la carte interactive.
-
-    🔹 Filtres :
-    - littoral (true / false)
-    - montagne (true / false)
-    - prix_min / prix_max
-    - densite (village, bourg, ville, grande_ville)
-    - distance personnalisée (lat, lon, rayon_km)
-
-    🔹 Scoring :
-    - pondérations dynamiques envoyées par l'utilisateur
+    Retourne un petit échantillon de communes (pour debug).
     """
+    rows = get_communes_sample(db, limit=limit)
+    return {"items": [dict(r._mapping) for r in rows]}
 
-    return get_communes_geojson(
+
+@router.get("/communes/geojson")
+def communes_geojson(
+    db: Session = Depends(get_db),
+    limit: Optional[int] = Query(None, ge=1),
+    mer: Optional[bool] = Query(None, description="Cherche proximité avec la mer"),
+    montagne: Optional[bool] = Query(
+        None, description="Cherche proximité avec la montagne"
+    ),
+    rayon_km: Optional[float] = Query(
+        None, ge=0, le=200, description="Rayon en km autour de la mer / montagne"
+    ),
+    densite: Optional[str] = Query(
+        None,
+        description="Village / Bourg / Ville / Grande ville",
+    ),
+    prix_max: Optional[float] = Query(
+        None, ge=0, description="Prix au m² maximal (déduit du budget/surface)"
+    ),
+    sun_pref: Optional[float] = Query(
+        None,
+        description="Préférence d'ensoleillement en heures/an",
+    ),
+    w_sante: int = Query(1, ge=1, le=3),
+    w_mag: int = Query(1, ge=1, le=3),
+    w_asso: int = Query(1, ge=1, le=3),
+):
+    """
+    Retourne les communes sous forme GeoJSON avec filtres et score global.
+    """
+    data = get_communes_geojson(
         db=db,
-
-        littoral=littoral,
+        limit=limit,
+        mer=mer,
         montagne=montagne,
-        prix_min=prix_min,
+        rayon_km=rayon_km,
         prix_max=prix_max,
         densite=densite,
-        lat=lat,
-        lon=lon,
-        rayon_km=rayon_km,
+        sun_pref=sun_pref,
         w_sante=w_sante,
         w_mag=w_mag,
         w_asso=w_asso,
-        w_temp=w_temp,
-        w_sun=w_sun,
     )
+    return data

@@ -1,9 +1,10 @@
 "use client";
+
 import dynamic from "next/dynamic";
 
-// Chargement dynamique du composant Leaflet côté client uniquement
+// Chargement dynamique pour éviter "window is not defined" côté serveur
 const LeafletMap = dynamic(() => import("./LeafletMapInner"), {
-  ssr: false, // ❗ évite l'erreur "window is not defined"
+  ssr: false,
 });
 
 export default LeafletMap;

@@ -4,39 +4,60 @@ import { MapContainer, TileLayer, GeoJSON } from "react-leaflet";
 import { useEffect, useState } from "react";
 import "leaflet/dist/leaflet.css";
 
-interface Filters {
-  littoral: boolean | null;
-  montagne: boolean | null;
+type Filters = {
+  mer: boolean;
+  montagne: boolean;
   densite: string | null;
-}
+  rayonKm: number | null;
+  prixM2Max: number | null;
+  sunPref: number | null; // heures/an
+};
 
 const API_BASE = "http://localhost:8000";
 
-export default function LeafletMapInner({ filters }: { filters: Filters | null }) {
+export default function LeafletMapInner({
+  filters,
+}: {
+  filters: Filters | null;
+}) {
   const [geojson, setGeojson] = useState<any | null>(null);
 
-  // 🔎 Construit l'URL avec les filtres
-  const buildQuery = (f: Filters | null) => {
-    if (!f) return "";
-    const p = new URLSearchParams();
-    if (f.littoral !== null) p.append("littoral", f.littoral ? "1" : "0");
-    if (f.montagne !== null) p.append("montagne", f.montagne ? "1" : "0");
-    if (f.densite) p.append("densite", f.densite);
-    return "?" + p.toString();
+  const buildQuery = (f: Filters) => {
+    const params = new URLSearchParams();
+
+    if (f.mer) params.append("mer", "1");
+    if (f.montagne) params.append("montagne", "1");
+    if (f.densite) params.append("densite", f.densite);
+    if (f.rayonKm !== null && !Number.isNaN(f.rayonKm)) {
+      params.append("rayon_km", String(f.rayonKm));
+    }
+    if (f.prixM2Max !== null && !Number.isNaN(f.prixM2Max)) {
+      params.append("prix_max", String(f.prixM2Max));
+    }
+    if (f.sunPref !== null && !Number.isNaN(f.sunPref)) {
+      params.append("sun_pref", String(f.sunPref));
+    }
+
+    const qs = params.toString();
+    return qs ? `?${qs}` : "";
   };
 
-  // 🚀 Fetch API après confirmation des filtres
   useEffect(() => {
     if (!filters) {
       setGeojson(null);
       return;
     }
 
-    fetch(`${API_BASE}/communes/geojson${buildQuery(filters)}`)
-      .then(r => r.json())
-      .then(data => setGeojson(data))
-      .catch(() => setGeojson(null));
+    const url = `${API_BASE}/communes/geojson${buildQuery(filters)}`;
+    console.log("🌍 Fetch URL:", url);
 
+    fetch(url)
+      .then((res) => res.json())
+      .then((data) => setGeojson(data))
+      .catch((err) => {
+        console.error("Erreur de fetch GeoJSON:", err);
+        setGeojson(null);
+      });
   }, [filters]);
 
   return (
@@ -54,7 +75,11 @@ export default function LeafletMapInner({ filters }: { filters: Filters | null }
         <GeoJSON
           key={Date.now()}
           data={geojson}
-          style={{ color: "#1d4ed8", weight: 1 }}
+          style={() => ({
+            color: "#0f766e", // turquoise
+            weight: 1,
+            fillOpacity: 0.6,
+          })}
         />
       )}
     </MapContainer>
