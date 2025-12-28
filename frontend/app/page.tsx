@@ -211,7 +211,7 @@ export default function HomePage() {
         {/* Compteur de communes (en haut à droite, sous le zoom) */}
         <div className="feature-counter bg-white shadow-md rounded-md px-3 py-1 text-xs text-slate-700 border border-slate-200">
           {appliedFilters
-            ? `Communes correspondant aux filtres : ${featureCount}`
+            ? `Nombre de communes filtrées : ${featureCount}`
             : "Aucun filtre appliqué"}
         </div>
 
@@ -221,7 +221,7 @@ export default function HomePage() {
             <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl border border-slate-200 px-4 py-4 space-y-4">
               {/* Emplacement */}
               <section>
-                <h2 className="font-semibold text-slate-900 mb-2">
+                <h2 className="font-semibold text-slate-900 mb-2 text-center">
                   Emplacement
                 </h2>
                 <div className="flex gap-2 mb-2">
@@ -302,7 +302,7 @@ export default function HomePage() {
 
               {/* Densité */}
               <section>
-                <h2 className="font-semibold text-slate-900 mb-2">Densité</h2>
+                <h2 className="font-semibold text-slate-900 mb-2 text-center">Densité</h2>
                 <div className="grid grid-cols-2 gap-2">
                   {["Village", "Bourg", "Ville", "Grande Ville"].map(
                     (label) => (
@@ -322,48 +322,51 @@ export default function HomePage() {
                 </div>
               </section>
 
-              {/* Immobilier */}
-              <section>
-                <h2 className="font-semibold text-slate-900 mb-2">
+              {/* --- IMMOBILIER --- */}
+              <h2 className="font-semibold text-slate-900 mb-2 text-center">
                   Immobilier
-                </h2>
-                <div className="space-y-2">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Surface souhaitée (m²)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      value={surfaceSouhaitee}
-                      onChange={(e) => setSurfaceSouhaitee(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-700 mb-1">
-                      Budget max (€)
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      value={budgetMax}
-                      onChange={(e) => setBudgetMax(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </section>
+              </h2>
+
+              <div className="flex flex-row gap-4 justify-center items-center">
+
+              {/* Surface souhaitée */}
+              <div className="flex flex-col items-center">
+                <label className="text-sm font-medium mb-1 text-center">
+                  Surface souhaitée (m²)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-36 rounded-lg px-3 py-2 text-sm text-center bg-white border border-slate-200 focus:border-teal-500 focus:ring-teal-500 focus:ring-1 outline-none"
+                  placeholder="ex: 100"
+                  value={surfaceSouhaitee}
+                  onChange={(e) => setSurfaceSouhaitee(e.target.value)}
+                />
+              </div>
+
+              {/* Budget max */}
+              <div className="flex flex-col items-center">
+                <label className="text-sm font-medium mb-1 text-center">
+                  Budget max (€)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-36 rounded-lg px-3 py-2 text-sm text-center bg-white border border-slate-200 focus:border-teal-500 focus:ring-teal-500 focus:ring-1 outline-none"
+                  placeholder="ex: 200 000"
+                  value={budgetMax}
+                  onChange={(e) => setBudgetMax(e.target.value)}
+                />
+              </div>
+
+            </div>
+
 
               {/* Ensoleillement */}
               <section>
-                <h2 className="font-semibold text-slate-900 mb-1">
-                  Ensoleillement souhaité
+                <h2 className="font-semibold text-slate-900 mb-2 text-center">
+                  Ensoleillement
                 </h2>
-                <p className="text-[11px] text-slate-500 mb-1">
-                  À gauche : plutôt peu de soleil – À droite : beaucoup de
-                  soleil (pondération maximale dans le score)
-                </p>
                 <div className="flex justify-between text-[11px] text-slate-500">
                   <span>Min</span>
                   <span>Max</span>
@@ -383,9 +386,9 @@ export default function HomePage() {
               {/* Pondérations Santé / Asso / Magasins */}
               <section className="space-y-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900 mb-1">
+                  <h2 className="text-sm font-semibold text-slate-900 mb-1 text-center">
                     Présence de médecins / hôpitaux
-                  </h3>
+                  </h2>
                   <div className="flex gap-2">
                     <button
                       className={importanceButtonClass(wSante, 1)}
@@ -409,9 +412,9 @@ export default function HomePage() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900 mb-1">
+                  <h2 className="text-sm font-semibold text-slate-900 mb-1 text-center">
                     Vie associative
-                  </h3>
+                  </h2>
                   <div className="flex gap-2">
                     <button
                       className={importanceButtonClass(wAsso, 1)}
@@ -435,9 +438,9 @@ export default function HomePage() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-900 mb-1">
-                    Magasins
-                  </h3>
+                  <h2 className="text-sm font-semibold text-slate-900 mb-1 text-center">
+                    Nombre de Magasins
+                  </h2>
                   <div className="flex gap-2">
                     <button
                       className={importanceButtonClass(wMag, 1)}

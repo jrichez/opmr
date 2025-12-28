@@ -1,3 +1,4 @@
+# app/services/communes.py
 import json
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -14,10 +15,6 @@ from app.models.communes import Commune
 from app.services.scoring import compute_score
 
 
-# ============================================================
-# 🏘️ Mapping densité (API → base)
-# ============================================================
-
 DENSITE_MAPPING = {
     "village": "Village",
     "bourg": "Bourg",
@@ -26,22 +23,11 @@ DENSITE_MAPPING = {
 }
 
 
-# ============================================================
-# 🔢 Utilitaires simples
-# ============================================================
-
 def get_communes_count(db: Session) -> int:
-    """
-    Retourne le nombre total de communes.
-    """
     return db.query(Commune).count()
 
 
 def get_communes_sample(db: Session, limit: int = 10):
-    """
-    Retourne un échantillon de communes (sans géométrie),
-    utile pour tests et debug.
-    """
     return (
         db.query(
             Commune.INSEE_COM,
@@ -56,42 +42,26 @@ def get_communes_sample(db: Session, limit: int = 10):
     )
 
 
-# ============================================================
-# 🗺️ Service principal : GeoJSON + filtres + score dynamique
-# ============================================================
-
 def get_communes_geojson(
     db: Session,
     limit: int = 5000,
-    # filtres excluants
     littoral: Optional[bool] = None,
     montagne: Optional[bool] = None,
     prix_min: Optional[float] = None,
     prix_max: Optional[float] = None,
     densite: Optional[str] = None,
-    # filtre distance personnalisée
     lat: Optional[float] = None,
     lon: Optional[float] = None,
     rayon_km: Optional[float] = None,
-    # pondérations du score
     w_sante: int = 1,
     w_mag: int = 1,
     w_asso: int = 1,
-    w_temp: int = 1,  # non utilisé pour l’instant mais conservé pour compat
+    w_temp: int = 1,
     w_sun: int = 3,
 ):
     """
-    Retourne les communes sous forme GeoJSON,
-    avec filtres combinables et score global dynamique.
-
-    - `littoral=True`  + `rayon_km`  => filtre `distance_mer_km <= rayon_km`
-    - `montagne=True` + `rayon_km`  => filtre `distance_montagne_km <= rayon_km`
-    - `lat/lon/rayon_km`           => filtre cercle perso (geom_l93)
+    Retourne le GeoJSON des communes filtrées + score sur 20
     """
-
-    # --------------------------------------------------------
-    # 🔎 Construction de la requête de base
-    # --------------------------------------------------------
 
     query = db.query(
         Commune.INSEE_COM,
@@ -111,81 +81,42 @@ def get_communes_geojson(
         ST_AsGeoJSON(Commune.geometry).label("geometry"),
     )
 
-    # --------------------------------------------------------
-    # 🌊 / 🏔️ Emplacement mer / montagne via distance + rayon
-    # --------------------------------------------------------
-
+    # 🌊 Littoral
     if littoral:
-        if rayon_km is not None:
-            query = query.filter(Commune.distance_mer_km <= rayon_km)
-        else:
-            # fallback : 10 km si pas de rayon fourni
-            query = query.filter(Commune.distance_mer_km <= 10)
+        query = query.filter(
+            Commune.distance_mer_km <= (rayon_km if rayon_km is not None else 10)
+        )
 
+    # 🏔️ Montagne
     if montagne:
-        if rayon_km is not None:
-            query = query.filter(Commune.distance_montagne_km <= rayon_km)
-        else:
-            query = query.filter(Commune.distance_montagne_km <= 10)
+        query = query.filter(
+            Commune.distance_montagne_km <= (rayon_km if rayon_km is not None else 10)
+        )
 
-    # --------------------------------------------------------
-    # 💶 Filtre prix au m²
-    # --------------------------------------------------------
-
+    # 💶 Prix immobilier
     if prix_min is not None:
         query = query.filter(Commune.Prixm2Moyen >= prix_min)
-
     if prix_max is not None:
         query = query.filter(Commune.Prixm2Moyen <= prix_max)
 
-    # --------------------------------------------------------
-    # 🏘️ Filtre densité (normalisé)
-    # --------------------------------------------------------
-
+    # 🏘️ Densité
     if densite is not None:
         densite_db = DENSITE_MAPPING.get(densite.lower())
-        if densite_db:
-            query = query.filter(Commune.densite_cat == densite_db)
-        else:
-            # valeur invalide → aucun résultat
-            query = query.filter(False)
+        query = query.filter(Commune.densite_cat == densite_db) if densite_db else query.filter(False)
 
-    # --------------------------------------------------------
-    # 🎯 Filtre distance personnalisée (lieu précis)
-    # --------------------------------------------------------
-
+    # 🎯 Lieu précis
     if lat is not None and lon is not None and rayon_km is not None:
-        point_l93 = ST_Transform(
-            ST_SetSRID(
-                ST_MakePoint(lon, lat),  # ⚠️ ordre lon, lat
-                4326
-            ),
-            2154
-        )
-
+        point_l93 = ST_Transform(ST_SetSRID(ST_MakePoint(lon, lat), 4326), 2154)
         query = query.filter(
-            ST_DWithin(
-                Commune.geom_l93,
-                point_l93,
-                rayon_km * 1000  # km → mètres
-            )
+            ST_DWithin(Commune.geom_l93, point_l93, rayon_km * 1000)
         )
-
-    # --------------------------------------------------------
-    # 📥 Exécution de la requête
-    # --------------------------------------------------------
 
     rows = query.limit(limit).all()
-
-    # --------------------------------------------------------
-    # 🧮 Construction du GeoJSON + score dynamique
-    # --------------------------------------------------------
 
     features = []
 
     for r in rows:
-        # propriétés normalisées pour le score
-        properties = {
+        props = {
             "score_sante": r.score_sante,
             "mag_scaled": r.mag_scaled,
             "asso_scaled": r.asso_scaled,
@@ -201,31 +132,28 @@ def get_communes_geojson(
             "sun_scaled": w_sun,
         }
 
-        score_global = compute_score(properties, weights)
+        score_sur_20 = compute_score(props, weights)
 
-        features.append(
-            {
-                "type": "Feature",
-                "geometry": json.loads(r.geometry) if r.geometry else None,
-                "properties": {
-                    "insee": r.INSEE_COM,
-                    "nom": r.libgeo,
-                    "departement": r.code_departement,
-                    "prix_m2": r.Prixm2Moyen,
-                    "densite": r.densite_cat,
-                    "score_sante": r.score_sante,
-                    "score_global": score_global,
-                    "mag_scaled": r.mag_scaled,
-                    "asso_scaled": r.asso_scaled,
-                    "temp_scaled": r.temp_scaled,
-                    "sun_scaled": r.sun_scaled,
-                    "littoral": bool(r.littoral_flag),
-                    "montagne": bool(r.montagne_flag),
-                    "distance_mer_km": r.distance_mer_km,
-                    "distance_montagne_km": r.distance_montagne_km,
-                },
-            }
-        )
+        features.append({
+            "type": "Feature",
+            "geometry": json.loads(r.geometry) if r.geometry else None,
+            "properties": {
+                "insee": r.INSEE_COM,
+                "nom": r.libgeo,
+                "score_global": score_sur_20,  # NOTE → sur 20
+                "prix_m2": r.Prixm2Moyen,
+                "densite": r.densite_cat,
+                "score_sante": r.score_sante,
+                "mag_scaled": r.mag_scaled,
+                "asso_scaled": r.asso_scaled,
+                "temp_scaled": r.temp_scaled,
+                "sun_scaled": r.sun_scaled,
+                "littoral": bool(r.littoral_flag),
+                "montagne": bool(r.montagne_flag),
+                "distance_mer_km": r.distance_mer_km,
+                "distance_montagne_km": r.distance_montagne_km,
+            },
+        })
 
     return {
         "type": "FeatureCollection",

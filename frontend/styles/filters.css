@@ -19,29 +19,56 @@
 /* Panel filtres overlay */
 .filters-panel {
   position: absolute;
-  top: 1rem;
+  top: 3.25rem;
   left: 1rem;
   max-width: 360px;
-  z-index: 1000; /* au-dessus de Leaflet */
+  z-index: 1000;
 }
 
-/* Bouton replier / déplier */
+/* ===========================================
+   🔹 BOUTON MASQUER / AFFICHER LES FILTRES
+   Centré par rapport à la card
+   =========================================== */
 .filters-toggle {
   position: absolute;
   top: 0.75rem;
-  left: 0.75rem;
+
+  /* 🔥 CENTRAGE HORIZONTAL DE LA CARD */
+  left: calc(1rem + 180px - 90px); /* 1rem (position card) + moitié card ~180px - 50px (moitié bouton) */
+
   z-index: 1100;
+  background-color: #009F9E;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  border: none;
+  cursor: pointer;
 }
 
-/* Card compteur en haut à droite */
+/* ===========================================
+   🔹 BOUTON "COMMUNES CORRESPONDANT AUX FILTRES"
+   Décalage de 20px vers la gauche
+   =========================================== */
 .feature-counter {
   position: absolute;
-  top: 3.5rem;  /* sous le zoom */
-  right: 1rem;
+  top: 0.85rem;
+
+  /* ancien : right: 3.5rem;  →  décalage demandé : 20px vers la gauche */
+  right: calc(3.5rem + 20px);
+
   z-index: 900;
+  background-color: #009F9E;
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  border: none;
 }
 
-/* Dropdown d’autocomplétion (lieu précis) */
+/* Dropdown autocomplétion */
 .autocomplete-list {
   position: absolute;
   background: #ffffff;
@@ -64,8 +91,25 @@
   background: #f1f5f9;
 }
 
-/* Tooltip leaflet un peu plus clean */
+/* Tooltip leaflet */
 .leaflet-tooltip {
   font-size: 0.75rem;
   font-weight: 500;
 }
+
+/* Légende de la carte (si ajoutée plus tard) */
+.leaflet-legend {
+  background: #ffffff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  border: 1px solid #ddd;
+  margin-bottom: 0.4rem;
+}
+
+
+
+
+

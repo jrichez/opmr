@@ -88,7 +88,7 @@ export default function LeafletMap({
     params.set("w_sante", String(filters.wSante));
     params.set("w_asso", String(filters.wAsso));
     params.set("w_mag", String(filters.wMag));
-    // soleil toujours très important
+    // soleil toujours très important côté backend pour l’instant
     params.set("w_sun", "3");
 
     const baseUrl =
@@ -116,7 +116,5 @@ export default function LeafletMap({
     })();
   }, [filters, onFeatureCountChange]);
 
-  return (
-    <LeafletMapInner geojson={geojson} />
-  );
+  return <LeafletMapInner geojson={geojson} />;
 }
