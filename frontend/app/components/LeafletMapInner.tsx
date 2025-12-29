@@ -97,12 +97,12 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
       />
 
       {geojson?.features?.length > 0 && (
-        <GeoJSON
-          key={geojson.features.length}
-          data={geojson}
-          style={styleFeature}
-          onEachFeature={onEachFeature}
-        />
+         <GeoJSON
+   key={JSON.stringify(geojson.features.map(f => f.properties.score_global))}
+   data={geojson}
+   style={styleFeature}
+   onEachFeature={onEachFeature}
+ />
       )}
 
       <Legend />

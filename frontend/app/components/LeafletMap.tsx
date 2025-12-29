@@ -8,6 +8,7 @@ const LeafletMapInner = dynamic(() => import("./LeafletMapInner"), {
 });
 
 export type EmplacementMode = "mer" | "montagne" | "lieu" | null;
+export type Importance = 1 | 2 | 3;
 
 export interface AppliedFilters {
   emplacement: EmplacementMode;
@@ -17,13 +18,14 @@ export interface AppliedFilters {
   surfaceSouhaitee: number | null;
   budgetMax: number | null;
 
-  wSante: 1 | 2 | 3;
-  wAsso: 1 | 2 | 3;
-  wMag: 1 | 2 | 3;
+  wSante: Importance;
+  wAsso: Importance;
+  wMag: Importance;
 
-  // 🌞 Slider (0 → faible / 0.5 → moyen / 1 → beaucoup)
+  // Slider d’ensoleillement (0 = peu, 1 = beaucoup)
   sunPreference: number;
 
+  // Lieu précis (optionnel)
   placeLat: number | null;
   placeLon: number | null;
 }
@@ -40,6 +42,7 @@ export default function LeafletMap({
   const [geojson, setGeojson] = useState<any | null>(null);
 
   useEffect(() => {
+    // Pas de filtres → carte vide (seulement le fond)
     if (!filters) {
       setGeojson(null);
       onFeatureCountChange?.(0);
@@ -48,7 +51,9 @@ export default function LeafletMap({
 
     const params = new URLSearchParams();
 
-    /** 🌊 Emplacement */
+    // ─────────────────────────────────────────────
+    // 🌍 Emplacement : mer / montagne / lieu précis
+    // ─────────────────────────────────────────────
     if (filters.emplacement === "mer") {
       params.set("littoral", "1");
       params.set("rayon_km", String(filters.rayonKm));
@@ -65,7 +70,10 @@ export default function LeafletMap({
       params.set("rayon_km", String(filters.rayonKm));
     }
 
-    /** 🏘️ Densité */
+    // ─────────────────────────────────────────────
+    // 🏘️ Densité
+    // backend attend : village / bourg / ville / grande_ville
+    // ─────────────────────────────────────────────
     if (filters.densite) {
       const key = filters.densite
         .toLowerCase()
@@ -75,25 +83,30 @@ export default function LeafletMap({
       params.set("densite", key);
     }
 
-    /** 💶 Immobilier */
+    // ─────────────────────────────────────────────
+    // 💶 Immobilier → déduction du prix max / m² si les 2 champs sont remplis
+    // ─────────────────────────────────────────────
     if (filters.surfaceSouhaitee && filters.budgetMax) {
       const prixM2Max = filters.budgetMax / filters.surfaceSouhaitee;
       params.set("prix_max", String(Math.round(prixM2Max)));
     }
 
-    /** 🎯 Pondérations */
+    // ─────────────────────────────────────────────
+    // 📊 Pondérations score
+    // ─────────────────────────────────────────────
     params.set("w_sante", String(filters.wSante));
     params.set("w_asso", String(filters.wAsso));
     params.set("w_mag", String(filters.wMag));
-    params.set("w_sun", "3"); // poids fixe
 
-    /** 🌞 🔥 Ajout CRUCIAL : préférence d'ensoleillement */
+    // Soleil : poids fixe côté backend (3) mais on envoie la préférence
+    params.set("w_sun", "3");
     params.set("sun_preference", String(filters.sunPreference ?? 0.5));
 
-    /** 🌐 API */
+    // ─────────────────────────────────────────────
+    // 🔗 Appel API
+    // ─────────────────────────────────────────────
     const baseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-
     const url = `${baseUrl}/communes/geojson?${params.toString()}`;
 
     (async () => {
