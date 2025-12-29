@@ -40,12 +40,14 @@ export default function LeafletMap({
   onFeatureCountChange,
 }: LeafletMapProps) {
   const [geojson, setGeojson] = useState<any | null>(null);
+  const [topThree, setTopThree] = useState<any[] | null>(null); // 🆕 ajout
 
   useEffect(() => {
-    // Pas de filtres → carte vide (seulement le fond)
+    // Pas de filtres → carte vide
     if (!filters) {
       setGeojson(null);
       onFeatureCountChange?.(0);
+      setTopThree(null);
       return;
     }
 
@@ -72,7 +74,6 @@ export default function LeafletMap({
 
     // ─────────────────────────────────────────────
     // 🏘️ Densité
-    // backend attend : village / bourg / ville / grande_ville
     // ─────────────────────────────────────────────
     if (filters.densite) {
       const key = filters.densite
@@ -84,7 +85,7 @@ export default function LeafletMap({
     }
 
     // ─────────────────────────────────────────────
-    // 💶 Immobilier → déduction du prix max / m² si les 2 champs sont remplis
+    // 💶 Immobilier
     // ─────────────────────────────────────────────
     if (filters.surfaceSouhaitee && filters.budgetMax) {
       const prixM2Max = filters.budgetMax / filters.surfaceSouhaitee;
@@ -92,13 +93,11 @@ export default function LeafletMap({
     }
 
     // ─────────────────────────────────────────────
-    // 📊 Pondérations score
+    // 📊 Pondérations
     // ─────────────────────────────────────────────
     params.set("w_sante", String(filters.wSante));
     params.set("w_asso", String(filters.wAsso));
     params.set("w_mag", String(filters.wMag));
-
-    // Soleil : poids fixe côté backend (3) mais on envoie la préférence
     params.set("w_sun", "3");
     params.set("sun_preference", String(filters.sunPreference ?? 0.5));
 
@@ -115,19 +114,72 @@ export default function LeafletMap({
         if (!res.ok) {
           console.error("Erreur API /communes/geojson", await res.text());
           setGeojson(null);
+          setTopThree(null);
           onFeatureCountChange?.(0);
           return;
         }
+
         const data = await res.json();
         setGeojson(data);
         onFeatureCountChange?.(data.features?.length ?? 0);
+
+        // 🏆 TOP 3 — tri + extraction des 3 meilleures
+        if (data?.features && data.features.length > 0) {
+          const sorted = [...data.features].sort(
+            (a, b) =>
+              (b.properties.score_global ?? 0) -
+              (a.properties.score_global ?? 0)
+          );
+          setTopThree(sorted.slice(0, 3));
+        } else {
+          setTopThree(null);
+        }
+
       } catch (err) {
         console.error("Erreur réseau /communes/geojson", err);
         setGeojson(null);
+        setTopThree(null);
         onFeatureCountChange?.(0);
       }
     })();
   }, [filters, onFeatureCountChange]);
 
-  return <LeafletMapInner geojson={geojson} />;
+  return (
+    <div className="relative w-full h-full">
+      <LeafletMapInner geojson={geojson} />
+
+    // ─────────────────────────────────────────────
+    // Encart Top 3 communes
+    // ─────────────────────────────────────────────
+
+      {topThree && topThree.length > 0 && (
+      <div
+        style={{
+          position: "absolute",
+          top: "55px",                // ✔ Position sous le compteur
+          right: "80px",               // ✔ Aligné à gauche du bouton zoom
+          background: "white",
+          padding: "10px 14px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+          fontSize: "0.85rem",
+          zIndex: 500,
+          minWidth: "220px",
+        }}
+      >
+        <strong>🏆 Top 3 des communes</strong>
+        <ol style={{ marginTop: "6px", paddingLeft: "18px" }}>
+          {topThree.map((c, i) => (
+            <li key={i} style={{ marginBottom: "4px" }}>
+              {i + 1}️⃣ {c.properties.nom} 
+              ({c.properties.code_departement}) —{" "}
+              {c.properties.score_global.toFixed(1)}/20
+            </li>
+          ))}
+        </ol>
+      </div>
+    )}
+
+    </div>
+  );
 }

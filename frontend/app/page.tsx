@@ -469,7 +469,7 @@ export default function HomePage() {
                 onClick={applyFilters}
                 className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl shadow-md transition-colors"
               >
-                Appliquer les filtres
+                Mettre à jour la carte
               </button>
             </div>
           </div>
