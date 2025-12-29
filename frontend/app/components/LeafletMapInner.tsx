@@ -11,7 +11,7 @@ interface LeafletMapInnerProps {
 
 const DEFAULT_CENTER: [number, number] = [46.7, 2.5];
 
-/* 🎨 Palette 5 niveaux */
+/** 🎨 5 niveaux */
 function getColor(score: number | undefined) {
   if (score == null) return "#cccccc";
   if (score < 4)  return "#004D4F";
@@ -21,32 +21,32 @@ function getColor(score: number | undefined) {
   return "#F1C15B";
 }
 
-/* 🏷️ Légende stabilisée (plus d'erreur appendChild) */
 function Legend() {
   const map = useMap();
 
   useEffect(() => {
-    if (!map || !map.getContainer()) return; // ⛔ sécurité absolue
+    if (!map || !map.getContainer()) return;
 
     const legend = L.control({ position: "bottomright" });
 
     legend.onAdd = () => {
       const container = L.DomUtil.create("div", "leaflet-legend");
       const items = [
-        { label: "Très faible", color: "#004D4F" },
-        { label: "Faible",      color: "#006B70" },
-        { label: "Moyen",       color: "#009F9E" },
-        { label: "Bon",         color: "#D4A350" },
-        { label: "Très bon",    color: "#F1C15B" },
+        { c: "#004D4F", t: "Très faible" },
+        { c: "#006B70", t: "Faible" },
+        { c: "#009F9E", t: "Moyen" },
+        { c: "#D4A350", t: "Bon" },
+        { c: "#F1C15B", t: "Très bon" },
       ];
 
       container.innerHTML = "<strong>Score / 20</strong><br>";
       items.forEach((i) => {
         container.innerHTML += `
           <div style="display:flex;align-items:center;margin:2px 0;">
-            <span style="width:14px;height:14px;border-radius:3px;background:${i.color};margin-right:6px;"></span>
-            ${i.label}
-          </div>`;
+            <span style="width:14px;height:14px;border-radius:3px;background:${i.c};margin-right:6px;"></span>
+            ${i.t}
+          </div>
+        `;
       });
 
       return container;
@@ -54,11 +54,8 @@ function Legend() {
 
     legend.addTo(map);
 
-    // Nettoyage quand le composant disparaît
     return () => {
-      try {
-        legend.remove();
-      } catch (_) {}
+      try { legend.remove(); } catch {}
     };
   }, [map]);
 
@@ -80,7 +77,6 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
   const onEachFeature = (feature: any, layer: any) => {
     const nom = feature?.properties?.nom ?? "Commune";
     const score = feature?.properties?.score_global;
-
     layer.bindTooltip(`${nom} – Score : ${score}/20`, {
       direction: "top",
       sticky: true,

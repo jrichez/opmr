@@ -21,10 +21,9 @@ export interface AppliedFilters {
   wAsso: 1 | 2 | 3;
   wMag: 1 | 2 | 3;
 
-  // Slider d’ensoleillement (préférence 0 = peu, 1 = beaucoup)
+  // 🌞 Slider (0 → faible / 0.5 → moyen / 1 → beaucoup)
   sunPreference: number;
 
-  // Lieu précis (optionnel)
   placeLat: number | null;
   placeLon: number | null;
 }
@@ -41,7 +40,6 @@ export default function LeafletMap({
   const [geojson, setGeojson] = useState<any | null>(null);
 
   useEffect(() => {
-    // pas de filtres => carte vide (seulement le fond)
     if (!filters) {
       setGeojson(null);
       onFeatureCountChange?.(0);
@@ -50,7 +48,7 @@ export default function LeafletMap({
 
     const params = new URLSearchParams();
 
-    // Emplacement mer / montagne / lieu précis (exclusifs)
+    /** 🌊 Emplacement */
     if (filters.emplacement === "mer") {
       params.set("littoral", "1");
       params.set("rayon_km", String(filters.rayonKm));
@@ -67,9 +65,8 @@ export default function LeafletMap({
       params.set("rayon_km", String(filters.rayonKm));
     }
 
-    // Densité
+    /** 🏘️ Densité */
     if (filters.densite) {
-      // backend attend village/bourg/ville/grande_ville en minuscule
       const key = filters.densite
         .toLowerCase()
         .replace(" ", "_")
@@ -78,19 +75,22 @@ export default function LeafletMap({
       params.set("densite", key);
     }
 
-    // Immobilier → prix max m² si les 2 champs sont remplis
+    /** 💶 Immobilier */
     if (filters.surfaceSouhaitee && filters.budgetMax) {
       const prixM2Max = filters.budgetMax / filters.surfaceSouhaitee;
       params.set("prix_max", String(Math.round(prixM2Max)));
     }
 
-    // Pondérations
+    /** 🎯 Pondérations */
     params.set("w_sante", String(filters.wSante));
     params.set("w_asso", String(filters.wAsso));
     params.set("w_mag", String(filters.wMag));
-    // soleil toujours très important côté backend pour l’instant
-    params.set("w_sun", "3");
+    params.set("w_sun", "3"); // poids fixe
 
+    /** 🌞 🔥 Ajout CRUCIAL : préférence d'ensoleillement */
+    params.set("sun_preference", String(filters.sunPreference ?? 0.5));
+
+    /** 🌐 API */
     const baseUrl =
       process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
 

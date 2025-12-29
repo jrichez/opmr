@@ -57,10 +57,16 @@ def get_communes_geojson(
     w_mag: int = 1,
     w_asso: int = 1,
     w_temp: int = 1,
+
+    # 🌞 poids fixe (toujours important)
     w_sun: int = 3,
+
+    # 🌞 slider utilisateur, valeur interne 0 → 1 (0.5 = "moyenne")
+    sun_preference: float = 0.5,
 ):
     """
     Retourne le GeoJSON des communes filtrées + score sur 20
+    avec prise en compte de la préférence soleil utilisateur.
     """
 
     query = db.query(
@@ -104,7 +110,7 @@ def get_communes_geojson(
         densite_db = DENSITE_MAPPING.get(densite.lower())
         query = query.filter(Commune.densite_cat == densite_db) if densite_db else query.filter(False)
 
-    # 🎯 Lieu précis
+    # 📍 Filtre géographique
     if lat is not None and lon is not None and rayon_km is not None:
         point_l93 = ST_Transform(ST_SetSRID(ST_MakePoint(lon, lat), 4326), 2154)
         query = query.filter(
@@ -116,6 +122,7 @@ def get_communes_geojson(
     features = []
 
     for r in rows:
+        # valeurs normalisées de la BDD
         props = {
             "score_sante": r.score_sante,
             "mag_scaled": r.mag_scaled,
@@ -124,15 +131,18 @@ def get_communes_geojson(
             "sun_scaled": r.sun_scaled,
         }
 
-        weights = {
-            "score_sante": w_sante,
-            "mag_scaled": w_mag,
-            "asso_scaled": w_asso,
-            "temp_scaled": w_temp,
-            "sun_scaled": w_sun,
+        # ⚙️ Pondérations + préférence soleil
+        # (on ne touche pas aux poids existants)
+        preferences = {
+            "w_sante": w_sante,
+            "w_mag": w_mag,
+            "w_asso": w_asso,
+            "w_sun": w_sun,                     # poids fixe
+            "sun_preference": sun_preference,   # 🔥 préférence utilisateur
         }
 
-        score_sur_20 = compute_score(props, weights)
+        # 🔥 Calcul du score sur 20
+        score_sur_20 = compute_score(props, preferences)
 
         features.append({
             "type": "Feature",
@@ -147,7 +157,8 @@ def get_communes_geojson(
                 "mag_scaled": r.mag_scaled,
                 "asso_scaled": r.asso_scaled,
                 "temp_scaled": r.temp_scaled,
-                "sun_scaled": r.sun_scaled,
+                "sun_scaled": r.sun_scaled,             # valeur BDD
+                "sun_preference": sun_preference,       # valeur utilisateur
                 "littoral": bool(r.littoral_flag),
                 "montagne": bool(r.montagne_flag),
                 "distance_mer_km": r.distance_mer_km,
