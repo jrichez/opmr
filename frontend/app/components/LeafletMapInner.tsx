@@ -70,7 +70,7 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
       color: "#ffffff",
       weight: 0.6,
       fillColor: getColor(score),
-      fillOpacity: 0.78,
+      fillOpacity: 0.5,
     };
   };
 

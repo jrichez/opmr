@@ -171,12 +171,12 @@ export default function LeafletMap({
         <ol style={{ marginTop: "6px", paddingLeft: "18px" }}>
           {topThree.map((c, i) => (
             <li key={i} style={{ marginBottom: "4px" }}>
-              {i + 1}️⃣ {c.properties.nom} 
-              ({c.properties.code_departement}) —{" "}
+              {i + 1}️⃣ {c.properties.nom} ({c.properties.code_departement}) —{" "}
               {c.properties.score_global.toFixed(1)}/20
             </li>
           ))}
         </ol>
+
       </div>
     )}
 

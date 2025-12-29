@@ -163,6 +163,7 @@ def get_communes_geojson(
                 "montagne": bool(r.montagne_flag),
                 "distance_mer_km": r.distance_mer_km,
                 "distance_montagne_km": r.distance_montagne_km,
+                "code_departement": r.code_departement, 
             },
         })
 
