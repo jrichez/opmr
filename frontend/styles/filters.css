@@ -9,14 +9,14 @@
   margin-top: 0.75rem;
 }
 
-/* Carte en plein écran (sous le header) */
+/* Carte plein écran sous header */
 .map-root {
   position: relative;
   width: 100%;
-  height: calc(100vh - 56px); /* ~ hauteur header */
+  height: calc(100vh - 56px);
 }
 
-/* Panel filtres overlay */
+/* Panel filtres */
 .filters-panel {
   position: absolute;
   top: 3.25rem;
@@ -25,17 +25,11 @@
   z-index: 1000;
 }
 
-/* ===========================================
-   🔹 BOUTON MASQUER / AFFICHER LES FILTRES
-   Centré par rapport à la card
-   =========================================== */
+/* Bouton masquage filtres */
 .filters-toggle {
   position: absolute;
   top: 0.75rem;
-
-  /* 🔥 CENTRAGE HORIZONTAL DE LA CARD */
-  left: calc(1rem + 180px - 90px); /* 1rem (position card) + moitié card ~180px - 50px (moitié bouton) */
-
+  left: calc(1rem + 180px - 90px);
   z-index: 1100;
   background-color: #009F9E;
   color: #ffffff;
@@ -47,17 +41,11 @@
   cursor: pointer;
 }
 
-/* ===========================================
-   🔹 BOUTON "COMMUNES CORRESPONDANT AUX FILTRES"
-   Décalage de 20px vers la gauche
-   =========================================== */
+/* Bouton "Nombre de communes filtrées" */
 .feature-counter {
   position: absolute;
   top: 0.85rem;
-
-  /* ancien : right: 3.5rem;  →  décalage demandé : 20px vers la gauche */
   right: calc(3.5rem + 20px);
-
   z-index: 900;
   background-color: #009F9E;
   color: #ffffff;
@@ -68,7 +56,7 @@
   border: none;
 }
 
-/* Dropdown autocomplétion */
+/* Autocomplétion */
 .autocomplete-list {
   position: absolute;
   background: #ffffff;
@@ -86,30 +74,66 @@
   font-size: 0.875rem;
   cursor: pointer;
 }
-
 .autocomplete-item:hover {
   background: #f1f5f9;
 }
 
-/* Tooltip leaflet */
+/* Tooltip */
 .leaflet-tooltip {
   font-size: 0.75rem;
   font-weight: 500;
 }
 
-/* Légende de la carte (si ajoutée plus tard) */
-.leaflet-legend {
-  background: #ffffff;
-  padding: 8px 10px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  line-height: 1rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
-  border: 1px solid #ddd;
-  margin-bottom: 0.4rem;
+/* ───────────────────────────────────────────────
+   🎨 Nouvelle légende dégradée verticale
+   ─────────────────────────────────────────────── */
+.score-gradient-legend {
+  position: absolute;
+  right: 18px;
+  bottom: 80px;
+  background: white;
+  padding: 10px 12px;
+  border-radius: 12px;
+  box-shadow: 0 0 8px rgba(0,0,0,0.25);
+  font-size: 12px;
+  z-index: 9999;
+  width: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
+/* Conteneur du dégradé + labels */
+.score-gradient-scale {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
 
+/* Barre verticale du score */
+.legend-bar {
+  width: 10px;
+  height: 500px;
+  border-radius: 8px;
+  background: linear-gradient(
+    to bottom,
+    #F4C842 0%,
+    #E6D36A 15%,
+    #B7DA8B 30%,
+    #7AC6B8 50%,
+    #009F9E 70%,
+    #006B70 85%,
+    #004D4F 100%
+  );
+}
 
-
-
+/* Labels alignés */
+.legend-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 500px;
+  font-size: 11px;
+  text-align: left;
+}

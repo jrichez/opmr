@@ -11,52 +11,55 @@ interface LeafletMapInnerProps {
 
 const DEFAULT_CENTER: [number, number] = [46.7, 2.5];
 
-/** 🎨 5 niveaux */
+/** 🎨 Couleurs dégradées turquoise → jaune (score 0 → 20) */
 function getColor(score: number | undefined) {
   if (score == null) return "#cccccc";
   if (score < 4)  return "#004D4F";
   if (score < 8)  return "#006B70";
   if (score < 12) return "#009F9E";
-  if (score < 16) return "#D4A350";
-  return "#F1C15B";
+  if (score < 16) return "#7AC6B8";
+  if (score < 18) return "#B7DA8B";
+  if (score < 19) return "#E6D36A";
+  return "#F4C842";
 }
 
+/* ────────────────────────────────────────────────
+   🎚️  Légende GRADUÉE (dégradé vertical)
+   ──────────────────────────────────────────────── */
 function Legend() {
   const map = useMap();
 
   useEffect(() => {
-    if (!map || !map.getContainer()) return;
+    if (!map) return;
+
+    // 🔥 Nettoyage au cas où l'ancienne légende serait encore dans le DOM
+    document.querySelectorAll(".leaflet-legend").forEach(el => el.remove());
 
     const legend = L.control({ position: "bottomright" });
 
     legend.onAdd = () => {
-      const container = L.DomUtil.create("div", "leaflet-legend");
-      const items = [
-        { c: "#004D4F", t: "Très faible" },
-        { c: "#006B70", t: "Faible" },
-        { c: "#009F9E", t: "Moyen" },
-        { c: "#D4A350", t: "Bon" },
-        { c: "#F1C15B", t: "Très bon" },
-      ];
+      const div = L.DomUtil.create("div", "score-gradient-legend");
 
-      container.innerHTML = "<strong>Score / 20</strong><br>";
-      items.forEach((i) => {
-        container.innerHTML += `
-          <div style="display:flex;align-items:center;margin:2px 0;">
-            <span style="width:14px;height:14px;border-radius:3px;background:${i.c};margin-right:6px;"></span>
-            ${i.t}
-          </div>
-        `;
-      });
+      div.innerHTML = `
+  <div class="legend-title">Score</div>
+  <div class="score-gradient-scale">
+    <div class="legend-bar"></div>
+    <div class="legend-labels">
+      <span>20</span>
+      <span>16</span>
+      <span>12</span>
+      <span>8</span>
+      <span>4</span>
+      <span>0</span>
+    </div>
+  </div>
+`;
 
-      return container;
+      return div;
     };
 
     legend.addTo(map);
-
-    return () => {
-      try { legend.remove(); } catch {}
-    };
+    return () => legend.remove();
   }, [map]);
 
   return null;
@@ -65,12 +68,11 @@ function Legend() {
 export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
   const styleFeature = (feature: any) => {
     const score = feature?.properties?.score_global ?? 0;
-
     return {
       color: "#ffffff",
-      weight: 0.6,
+      weight: 0.4,
       fillColor: getColor(score),
-      fillOpacity: 0.5,
+      fillOpacity: 0.55,
     };
   };
 
@@ -97,12 +99,12 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
       />
 
       {geojson?.features?.length > 0 && (
-         <GeoJSON
-   key={JSON.stringify(geojson.features.map(f => f.properties.score_global))}
-   data={geojson}
-   style={styleFeature}
-   onEachFeature={onEachFeature}
- />
+        <GeoJSON
+          key={JSON.stringify(geojson.features.map(f => f.properties.score_global))}
+          data={geojson}
+          style={styleFeature}
+          onEachFeature={onEachFeature}
+        />
       )}
 
       <Legend />
