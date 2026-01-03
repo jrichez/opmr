@@ -161,24 +161,24 @@ export default function HomePage() {
     [
       "px-3 py-1 rounded-full border text-xs font-medium transition-colors",
       current === value
-        ? "bg-emerald-600 text-white border-emerald-600"
-        : "bg-white text-slate-700 border-slate-300 hover:bg-emerald-50",
+        ? "bg-[#009F9E] text-white border-[#009F9E]"
+        : "bg-white text-slate-700 border-slate-300 hover:bg-[rgba(0,159,158,0.1)]",
     ].join(" ");
 
   const densiteButtonClass = (value: string): string =>
     [
       "flex-1 text-center py-2 rounded-md border text-sm font-medium",
       densite === value
-        ? "bg-emerald-600 text-white border-emerald-600"
-        : "bg-white text-slate-700 border-slate-300 hover:bg-emerald-50",
+        ? "bg-[#009F9E] text-white border-[#009F9E]"
+        : "bg-white text-slate-700 border-slate-300 hover:bg-[rgba(0,159,158,0.1)]",
     ].join(" ");
 
   const emplacementButtonClass = (value: EmplacementMode): string =>
     [
       "flex-1 text-center py-2 rounded-md border text-sm font-semibold",
       emplacement === value
-        ? "bg-emerald-600 text-white border-emerald-600"
-        : "bg-white text-slate-700 border-slate-300 hover:bg-emerald-50",
+        ? "bg-[#009F9E] text-white border-[#009F9E]"
+        : "bg-white text-slate-700 border-slate-300 hover:bg-[rgba(0,159,158,0.1)]",
     ].join(" ");
 
   // ---------------------------------------------------------
@@ -295,7 +295,7 @@ export default function HomePage() {
                     max={100}
                     value={rayonKm}
                     onChange={(e) => setRayonKm(Number(e.target.value))}
-                    className="w-full"
+                    className="w-full accent-[#F2CA47]"
                   />
                 </div>
               </section>
@@ -379,7 +379,7 @@ export default function HomePage() {
                   onChange={(e) =>
                     setSunPreference(Number(e.target.value) / 100)
                   }
-                  className="w-full mt-1"
+                  className="w-full mt-1 accent-[#F2CA47]"
                 />
               </section>
 
@@ -467,7 +467,8 @@ export default function HomePage() {
               {/* Bouton appliquer */}
               <button
                 onClick={applyFilters}
-                className="w-full mt-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 rounded-xl shadow-md transition-colors"
+                className="w-full mt-2 bg-[#009F9E] hover:bg-[#007f7d] text-white font-semibold py-2.5 rounded-xl shadow-md transition-colors"
+
               >
                 Mettre à jour la carte
               </button>

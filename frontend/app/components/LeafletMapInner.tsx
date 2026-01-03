@@ -69,7 +69,7 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
   const styleFeature = (feature: any) => {
     const score = feature?.properties?.score_global ?? 0;
     return {
-      color: "#ffffff",
+      color: "#444444",
       weight: 0.4,
       fillColor: getColor(score),
       fillOpacity: 0.55,
