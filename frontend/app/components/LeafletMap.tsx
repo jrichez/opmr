@@ -146,7 +146,12 @@ export default function LeafletMap({
 
   return (
     <div className="relative w-full h-full">
-      <LeafletMapInner geojson={geojson} />
+      <LeafletMapInner
+      geojson={geojson}
+      placeLat={filters?.placeLat}
+      placeLon={filters?.placeLon}
+    />
+
 
 {/* ─────────────────────────────────────────────
     Encart Top 3 communes

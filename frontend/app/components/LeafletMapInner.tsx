@@ -7,9 +7,12 @@ import L from "leaflet";
 
 interface LeafletMapInnerProps {
   geojson: any | null;
+  placeLat?: number | null;
+  placeLon?: number | null;
 }
 
 const DEFAULT_CENTER: [number, number] = [46.7, 2.5];
+const PLACE_ZOOM_LEVEL = 11;
 
 /** 🎨 Couleurs dégradées turquoise → jaune (score 0 → 20) */
 function getColor(score: number | undefined) {
@@ -24,7 +27,30 @@ function getColor(score: number | undefined) {
 }
 
 /* ────────────────────────────────────────────────
-   🎚️  Légende GRADUÉE
+   🎯 Zoom automatique sur lieu précis
+   ──────────────────────────────────────────────── */
+function MapAutoZoom({
+  placeLat,
+  placeLon,
+}: {
+  placeLat?: number | null;
+  placeLon?: number | null;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (placeLat != null && placeLon != null) {
+      map.flyTo([placeLat, placeLon], PLACE_ZOOM_LEVEL, {
+        duration: 0.8,
+      });
+    }
+  }, [placeLat, placeLon, map]);
+
+  return null;
+}
+
+/* ────────────────────────────────────────────────
+   🎚️ Légende graduée
    ──────────────────────────────────────────────── */
 function Legend() {
   const map = useMap();
@@ -66,7 +92,11 @@ function Legend() {
   return null;
 }
 
-export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
+export default function LeafletMapInner({
+  geojson,
+  placeLat,
+  placeLon,
+}: LeafletMapInnerProps) {
   const styleFeature = (feature: any) => {
     const score = feature?.properties?.score_global ?? 0;
     return {
@@ -102,7 +132,6 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
         ? Math.round(props.mag_scaled * 20)
         : null;
 
-    // Tooltip (hover)
     layer.bindTooltip(`${nom} – Score : ${scoreGlobal}/20`, {
       direction: "top",
       sticky: true,
@@ -110,7 +139,6 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
       className: "text-[11px]",
     });
 
-    // Popup (click)
     layer.bindPopup(
       `
       <div style="min-width:220px;font-family:system-ui;">
@@ -173,6 +201,8 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution="© OpenStreetMap contributors"
       />
+
+      <MapAutoZoom placeLat={placeLat} placeLon={placeLon} />
 
       {geojson?.features?.length > 0 && (
         <GeoJSON
