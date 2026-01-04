@@ -14,8 +14,8 @@ const DEFAULT_CENTER: [number, number] = [46.7, 2.5];
 /** 🎨 Couleurs dégradées turquoise → jaune (score 0 → 20) */
 function getColor(score: number | undefined) {
   if (score == null) return "#cccccc";
-  if (score < 4)  return "#004D4F";
-  if (score < 8)  return "#006B70";
+  if (score < 4) return "#004D4F";
+  if (score < 8) return "#006B70";
   if (score < 12) return "#009F9E";
   if (score < 16) return "#7AC6B8";
   if (score < 18) return "#B7DA8B";
@@ -24,7 +24,7 @@ function getColor(score: number | undefined) {
 }
 
 /* ────────────────────────────────────────────────
-   🎚️  Légende GRADUÉE (dégradé vertical)
+   🎚️  Légende GRADUÉE
    ──────────────────────────────────────────────── */
 function Legend() {
   const map = useMap();
@@ -32,8 +32,9 @@ function Legend() {
   useEffect(() => {
     if (!map) return;
 
-    // 🔥 Nettoyage au cas où l'ancienne légende serait encore dans le DOM
-    document.querySelectorAll(".leaflet-legend").forEach(el => el.remove());
+    document
+      .querySelectorAll(".score-gradient-legend")
+      .forEach((el) => el.remove());
 
     const legend = L.control({ position: "bottomright" });
 
@@ -41,19 +42,19 @@ function Legend() {
       const div = L.DomUtil.create("div", "score-gradient-legend");
 
       div.innerHTML = `
-  <div class="legend-title">Score</div>
-  <div class="score-gradient-scale">
-    <div class="legend-bar"></div>
-    <div class="legend-labels">
-      <span>20</span>
-      <span>16</span>
-      <span>12</span>
-      <span>8</span>
-      <span>4</span>
-      <span>0</span>
-    </div>
-  </div>
-`;
+        <div class="legend-title">Score / 20</div>
+        <div class="score-gradient-scale">
+          <div class="legend-bar"></div>
+          <div class="legend-labels">
+            <span>20</span>
+            <span>16</span>
+            <span>12</span>
+            <span>8</span>
+            <span>4</span>
+            <span>0</span>
+          </div>
+        </div>
+      `;
 
       return div;
     };
@@ -77,14 +78,89 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
   };
 
   const onEachFeature = (feature: any, layer: any) => {
-    const nom = feature?.properties?.nom ?? "Commune";
-    const score = feature?.properties?.score_global;
-    layer.bindTooltip(`${nom} – Score : ${score}/20`, {
+    const props = feature?.properties ?? {};
+
+    const nom = props.nom ?? "Commune";
+    const scoreGlobal = props.score_global ?? 0;
+
+    const ensoleillement = props.ensoleillement_moyen_h
+      ? Math.round(props.ensoleillement_moyen_h)
+      : null;
+
+    const scoreSante =
+      props.score_sante != null
+        ? Math.round(props.score_sante * 20)
+        : null;
+
+    const scoreAsso =
+      props.asso_scaled != null
+        ? Math.round(props.asso_scaled * 20)
+        : null;
+
+    const scoreMag =
+      props.mag_scaled != null
+        ? Math.round(props.mag_scaled * 20)
+        : null;
+
+    // Tooltip (hover)
+    layer.bindTooltip(`${nom} – Score : ${scoreGlobal}/20`, {
       direction: "top",
       sticky: true,
       opacity: 0.9,
       className: "text-[11px]",
     });
+
+    // Popup (click)
+    layer.bindPopup(
+      `
+      <div style="min-width:220px;font-family:system-ui;">
+        <h3 style="margin:0 0 8px 0;font-size:15px;font-weight:700;">
+          ${nom}
+        </h3>
+
+        <div style="font-size:13px;line-height:1.5;">
+          ${
+            ensoleillement != null
+              ? `<div>☀️ Ensoleillement : <strong>${ensoleillement} h/an</strong></div>`
+              : ""
+          }
+          ${
+            scoreSante != null
+              ? `<div>🏥 Santé : <strong>${scoreSante}/20</strong></div>`
+              : ""
+          }
+          ${
+            scoreAsso != null
+              ? `<div>🤝 Vie associative : <strong>${scoreAsso}/20</strong></div>`
+              : ""
+          }
+          ${
+            scoreMag != null
+              ? `<div>🛒 Commerces : <strong>${scoreMag}/20</strong></div>`
+              : ""
+          }
+        </div>
+
+        <div style="margin-top:10px;text-align:center;">
+          <button
+            style="
+              background:#009F9E;
+              color:white;
+              border:none;
+              border-radius:999px;
+              padding:6px 14px;
+              font-size:12px;
+              font-weight:600;
+              cursor:pointer;
+            "
+          >
+            Fiche complète
+          </button>
+        </div>
+      </div>
+      `,
+      { closeButton: true }
+    );
   };
 
   return (
@@ -100,7 +176,9 @@ export default function LeafletMapInner({ geojson }: LeafletMapInnerProps) {
 
       {geojson?.features?.length > 0 && (
         <GeoJSON
-          key={JSON.stringify(geojson.features.map(f => f.properties.score_global))}
+          key={JSON.stringify(
+            geojson.features.map((f: any) => f.properties.score_global)
+          )}
           data={geojson}
           style={styleFeature}
           onEachFeature={onEachFeature}

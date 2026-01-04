@@ -148,9 +148,10 @@ export default function LeafletMap({
     <div className="relative w-full h-full">
       <LeafletMapInner geojson={geojson} />
 
-    // ─────────────────────────────────────────────
-    // Encart Top 3 communes
-    // ─────────────────────────────────────────────
+{/* ─────────────────────────────────────────────
+    Encart Top 3 communes
+    ───────────────────────────────────────────── */}
+
 
       {topThree && topThree.length > 0 && (
       <div

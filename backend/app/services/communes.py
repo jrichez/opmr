@@ -1,4 +1,3 @@
-# app/services/communes.py
 import json
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -69,17 +68,31 @@ def get_communes_geojson(
     avec prise en compte de la préférence soleil utilisateur.
     """
 
+    def to_score_20(x: Optional[float]) -> int:
+        """
+        Convertit une valeur normalisée [0..1] en note entière sur 20.
+        Si None → 0.
+        """
+        v = x or 0.0
+        return int(round(v * 20))
+
     query = db.query(
         Commune.INSEE_COM,
         Commune.libgeo,
         Commune.code_departement,
         Commune.Prixm2Moyen,
         Commune.densite_cat,
+
+        # ✅ champs normalisés (utiles scoring + popup)
         Commune.score_sante,
         Commune.mag_scaled,
         Commune.asso_scaled,
         Commune.temp_scaled,
         Commune.sun_scaled,
+
+        # ✅ champ "réel" lisible (popup)
+        Commune.ensoleillement_moyen_h,
+
         Commune.littoral_flag,
         Commune.montagne_flag,
         Commune.distance_mer_km,
@@ -108,7 +121,11 @@ def get_communes_geojson(
     # 🏘️ Densité
     if densite is not None:
         densite_db = DENSITE_MAPPING.get(densite.lower())
-        query = query.filter(Commune.densite_cat == densite_db) if densite_db else query.filter(False)
+        query = (
+            query.filter(Commune.densite_cat == densite_db)
+            if densite_db
+            else query.filter(False)
+        )
 
     # 📍 Filtre géographique
     if lat is not None and lon is not None and rayon_km is not None:
@@ -132,17 +149,19 @@ def get_communes_geojson(
         }
 
         # ⚙️ Pondérations + préférence soleil
-        # (on ne touche pas aux poids existants)
         preferences = {
             "w_sante": w_sante,
             "w_mag": w_mag,
             "w_asso": w_asso,
             "w_sun": w_sun,                     # poids fixe
-            "sun_preference": sun_preference,   # 🔥 préférence utilisateur
+            "sun_preference": sun_preference,   # préférence utilisateur
         }
 
-        # 🔥 Calcul du score sur 20
+        # 🔥 Calcul du score global sur 20
         score_sur_20 = compute_score(props, preferences)
+
+        # ✅ Champs pour la popup (scores par critère /20 + ensoleillement "réel")
+        enso_h = int(round((r.ensoleillement_moyen_h or 0)))
 
         features.append({
             "type": "Feature",
@@ -151,19 +170,29 @@ def get_communes_geojson(
                 "insee": r.INSEE_COM,
                 "nom": r.libgeo,
                 "score_global": score_sur_20,  # NOTE → sur 20
+
                 "prix_m2": r.Prixm2Moyen,
                 "densite": r.densite_cat,
+
+                # valeurs BDD existantes
                 "score_sante": r.score_sante,
                 "mag_scaled": r.mag_scaled,
                 "asso_scaled": r.asso_scaled,
                 "temp_scaled": r.temp_scaled,
                 "sun_scaled": r.sun_scaled,             # valeur BDD
                 "sun_preference": sun_preference,       # valeur utilisateur
+
+                # ✅ AJOUTS pour popup
+                "ensoleillement_h": enso_h,             # entier h/an
+                "score_sante_20": to_score_20(r.score_sante),
+                "score_asso_20": to_score_20(r.asso_scaled),
+                "score_mag_20": to_score_20(r.mag_scaled),
+
                 "littoral": bool(r.littoral_flag),
                 "montagne": bool(r.montagne_flag),
                 "distance_mer_km": r.distance_mer_km,
                 "distance_montagne_km": r.distance_montagne_km,
-                "code_departement": r.code_departement, 
+                "code_departement": r.code_departement,
             },
         })
 
