@@ -44,6 +44,8 @@ export default function HomePage() {
   const [placeLat, setPlaceLat] = useState<number | null>(null);
   const [placeLon, setPlaceLon] = useState<number | null>(null);
   const [isSearchingPlace, setIsSearchingPlace] = useState(false);
+  const [placeSelected, setPlaceSelected] = useState(false);
+
 
   // Filtres vraiment appliqués à la carte
   const [appliedFilters, setAppliedFilters] = useState<AppliedFilters | null>(
@@ -57,7 +59,7 @@ export default function HomePage() {
   // 🔍 Autocomplétion "Lieu précis" (API adresse.data.gouv.fr)
   // =========================================================
   useEffect(() => {
-    if (!placeQuery || emplacement !== "lieu") {
+    if (!placeQuery || emplacement !== "lieu" || placeSelected) {
       setPlaceSuggestions([]);
       return;
     }
@@ -110,6 +112,7 @@ export default function HomePage() {
   const selectPlaceSuggestion = (s: PlaceSuggestion) => {
     // ✅ Remplit le champ avec "Ville (CP)" + ferme immédiatement la liste
     const display = s.postcode ? `${s.label} (${s.postcode})` : s.label;
+    setPlaceSelected(true);
     setPlaceQuery(display);
     setPlaceSuggestions([]);
     setPlaceLat(s.lat);
@@ -268,6 +271,7 @@ export default function HomePage() {
                     value={placeQuery}
                     onChange={(e) => {
                       setPlaceQuery(e.target.value);
+                      setPlaceSelected(false);
                       handleEmplacementChange("lieu");
                     }}
                     // ✅ ferme la liste quand on sort du champ (après un bref délai)
