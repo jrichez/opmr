@@ -9,7 +9,8 @@ const MAP_DEFAULT_RAYON_KM = 20;
 type Importance = 1 | 2 | 3;
 
 interface PlaceSuggestion {
-  label: string;
+  label: string;       // ex: "Lille"
+  postcode: string | null; // ex: "59000"
   lat: number;
   lon: number;
 }
@@ -66,21 +67,29 @@ export default function HomePage() {
     async function fetchSuggestions() {
       try {
         setIsSearchingPlace(true);
+
+        // ✅ Filtre communes uniquement
         const url = `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(
           placeQuery
-        )}&limit=5`;
+        )}&type=municipality&limit=5`;
+
         const res = await fetch(url, { signal: controller.signal });
         if (!res.ok) {
           setPlaceSuggestions([]);
           return;
         }
+
         const data = await res.json();
+
+        // ✅ On stocke city + postcode (pas besoin INSEE)
         const suggestions: PlaceSuggestion[] =
           data.features?.map((f: any) => ({
-            label: f.properties.label as string,
+            label: (f.properties?.city as string) ?? (f.properties?.label as string) ?? "",
+            postcode: (f.properties?.postcode as string) ?? null,
             lon: f.geometry.coordinates[0] as number,
             lat: f.geometry.coordinates[1] as number,
           })) ?? [];
+
         setPlaceSuggestions(suggestions);
       } catch (e) {
         if ((e as any).name !== "AbortError") {
@@ -99,7 +108,9 @@ export default function HomePage() {
   }, [placeQuery, emplacement]);
 
   const selectPlaceSuggestion = (s: PlaceSuggestion) => {
-    setPlaceQuery(s.label);
+    // ✅ Remplit le champ avec "Ville (CP)" + ferme immédiatement la liste
+    const display = s.postcode ? `${s.label} (${s.postcode})` : s.label;
+    setPlaceQuery(display);
     setPlaceSuggestions([]);
     setPlaceLat(s.lat);
     setPlaceLon(s.lon);
@@ -228,9 +239,7 @@ export default function HomePage() {
                   <button
                     className={emplacementButtonClass("mer")}
                     onClick={() =>
-                      handleEmplacementChange(
-                        emplacement === "mer" ? null : "mer"
-                      )
+                      handleEmplacementChange(emplacement === "mer" ? null : "mer")
                     }
                   >
                     Mer
@@ -261,7 +270,12 @@ export default function HomePage() {
                       setPlaceQuery(e.target.value);
                       handleEmplacementChange("lieu");
                     }}
+                    // ✅ ferme la liste quand on sort du champ (après un bref délai)
+                    onBlur={() => {
+                      window.setTimeout(() => setPlaceSuggestions([]), 120);
+                    }}
                   />
+
                   {isSearchingPlace && (
                     <div className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">
                       …
@@ -272,11 +286,13 @@ export default function HomePage() {
                     <div className="autocomplete-list">
                       {placeSuggestions.map((s) => (
                         <div
-                          key={`${s.lat}-${s.lon}-${s.label}`}
+                          key={`${s.lat}-${s.lon}-${s.label}-${s.postcode ?? ""}`}
                           className="autocomplete-item"
-                          onClick={() => selectPlaceSuggestion(s)}
+                          // ✅ onMouseDown évite le “double clic” (le blur arrive après)
+                          onMouseDown={() => selectPlaceSuggestion(s)}
                         >
                           {s.label}
+                          {s.postcode ? ` (${s.postcode})` : ""}
                         </div>
                       ))}
                     </div>
@@ -302,65 +318,58 @@ export default function HomePage() {
 
               {/* Densité */}
               <section>
-                <h2 className="font-semibold text-slate-900 mb-2 text-center">Densité</h2>
+                <h2 className="font-semibold text-slate-900 mb-2 text-center">
+                  Densité
+                </h2>
                 <div className="grid grid-cols-2 gap-2">
-                  {["Village", "Bourg", "Ville", "Grande Ville"].map(
-                    (label) => (
-                      <button
-                        key={label}
-                        className={densiteButtonClass(label)}
-                        onClick={() =>
-                          setDensite((prev) =>
-                            prev === label ? null : label
-                          )
-                        }
-                      >
-                        {label}
-                      </button>
-                    )
-                  )}
+                  {["Village", "Bourg", "Ville", "Grande Ville"].map((label) => (
+                    <button
+                      key={label}
+                      className={densiteButtonClass(label)}
+                      onClick={() => setDensite((prev) => (prev === label ? null : label))}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               </section>
 
               {/* --- IMMOBILIER --- */}
               <h2 className="font-semibold text-slate-900 mb-2 text-center">
-                  Immobilier
+                Immobilier
               </h2>
 
               <div className="flex flex-row gap-4 justify-center items-center">
+                {/* Surface souhaitée */}
+                <div className="flex flex-col items-center">
+                  <label className="text-sm font-medium mb-1 text-center">
+                    Surface souhaitée (m²)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-36 rounded-lg px-3 py-2 text-sm text-center bg-white border border-slate-200 focus:border-teal-500 focus:ring-teal-500 focus:ring-1 outline-none"
+                    placeholder="ex: 100"
+                    value={surfaceSouhaitee}
+                    onChange={(e) => setSurfaceSouhaitee(e.target.value)}
+                  />
+                </div>
 
-              {/* Surface souhaitée */}
-              <div className="flex flex-col items-center">
-                <label className="text-sm font-medium mb-1 text-center">
-                  Surface souhaitée (m²)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  className="w-36 rounded-lg px-3 py-2 text-sm text-center bg-white border border-slate-200 focus:border-teal-500 focus:ring-teal-500 focus:ring-1 outline-none"
-                  placeholder="ex: 100"
-                  value={surfaceSouhaitee}
-                  onChange={(e) => setSurfaceSouhaitee(e.target.value)}
-                />
+                {/* Budget max */}
+                <div className="flex flex-col items-center">
+                  <label className="text-sm font-medium mb-1 text-center">
+                    Budget max (€)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    className="w-36 rounded-lg px-3 py-2 text-sm text-center bg-white border border-slate-200 focus:border-teal-500 focus:ring-teal-500 focus:ring-1 outline-none"
+                    placeholder="ex: 200 000"
+                    value={budgetMax}
+                    onChange={(e) => setBudgetMax(e.target.value)}
+                  />
+                </div>
               </div>
-
-              {/* Budget max */}
-              <div className="flex flex-col items-center">
-                <label className="text-sm font-medium mb-1 text-center">
-                  Budget max (€)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  className="w-36 rounded-lg px-3 py-2 text-sm text-center bg-white border border-slate-200 focus:border-teal-500 focus:ring-teal-500 focus:ring-1 outline-none"
-                  placeholder="ex: 200 000"
-                  value={budgetMax}
-                  onChange={(e) => setBudgetMax(e.target.value)}
-                />
-              </div>
-
-            </div>
-
 
               {/* Ensoleillement */}
               <section>
@@ -376,9 +385,7 @@ export default function HomePage() {
                   min={0}
                   max={100}
                   value={sunPreference * 100}
-                  onChange={(e) =>
-                    setSunPreference(Number(e.target.value) / 100)
-                  }
+                  onChange={(e) => setSunPreference(Number(e.target.value) / 100)}
                   className="w-full mt-1 accent-[#F2CA47]"
                 />
               </section>
@@ -468,7 +475,6 @@ export default function HomePage() {
               <button
                 onClick={applyFilters}
                 className="w-full mt-2 bg-[#009F9E] hover:bg-[#007f7d] text-white font-semibold py-2.5 rounded-xl shadow-md transition-colors"
-
               >
                 Mettre à jour la carte
               </button>
@@ -477,10 +483,7 @@ export default function HomePage() {
         )}
 
         {/* Carte Leaflet */}
-        <DynamicLeafletMap
-          filters={appliedFilters}
-          onFeatureCountChange={setFeatureCount}
-        />
+        <DynamicLeafletMap filters={appliedFilters} onFeatureCountChange={setFeatureCount} />
       </main>
     </div>
   );
